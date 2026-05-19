@@ -11,6 +11,7 @@ import {
     AlertCircle,
     CheckCircle,
     Lightbulb,
+    RotateCcw,
 } from 'lucide-react';
 import { api, SubmissionDto, TaskDto } from '@/services/api';
 import { useToastStore } from '@/store/useToastStore';
@@ -180,6 +181,40 @@ const StudentTaskPage: React.FC = () => {
         };
     }, [isLoading]);
 
+    // Восстановить начальные позиции из task.initialState. Сохранённые блоки в проекте
+    // сохраняются (Blockly XML живёт в первом спрайте), поэтому записываем его обратно.
+    const handleResetScene = () => {
+        if (!task) return;
+        runtime.stop();
+        setRunning(false);
+
+        const fresh = buildProjectFromSceneState(
+            task.title || 'Задание',
+            'student',
+            'Student',
+            task.initialState
+        );
+
+        // Переносим текущий XML блоков в первый новый спрайт, чтобы решение не потерялось
+        const ws = workspaceRef.current;
+        const xml = ws ? getWorkspaceXml(ws) : '';
+        const targetId = fresh.sprites[0]?.id || fresh.stage.id;
+        if (xml && targetId) {
+            const updateTarget = (id: string) => {
+                if (id === fresh.stage.id) {
+                    fresh.stage = { ...fresh.stage, blocks: xml };
+                    return;
+                }
+                fresh.sprites = fresh.sprites.map(s =>
+                    s.id === id ? { ...s, blocks: xml } : s
+                );
+            };
+            updateTarget(targetId);
+        }
+        setProject(fresh);
+        primaryTargetIdRef.current = targetId;
+    };
+
     const handleRun = async () => {
         const project = useProjectStore.getState().currentProject;
         if (!project) return;
@@ -190,6 +225,23 @@ const StudentTaskPage: React.FC = () => {
         } catch (e) {
             console.error('Runtime error:', e);
         }
+
+        // Синхронизируем финальные позиции спрайтов из runtime в проект,
+        // чтобы канвас сразу отобразил результат после остановки.
+        const finalState = runtime.getState();
+        const { updateSprite, updateStage } = useProjectStore.getState();
+        finalState.sprites.forEach(rs => {
+            updateSprite(rs.id, {
+                x: rs.x,
+                y: rs.y,
+                direction: rs.direction,
+                size: rs.size,
+                visible: rs.visible,
+                currentCostume: rs.currentCostume,
+            });
+        });
+        updateStage({ currentBackdrop: finalState.stage.currentBackdrop });
+
         setRunning(false);
     };
 
@@ -366,22 +418,33 @@ const StudentTaskPage: React.FC = () => {
                 {/* Right Panel — Stage (read-only) */}
                 <div className="w-[520px] flex flex-col border-l border-[#EEF0F4] bg-white shrink-0">
                     <div className="flex items-center justify-between px-4 py-2 border-b border-[#EEF0F4]">
-                        <button
-                            onClick={handleRun}
-                            disabled={isRunning}
-                            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                                isRunning
-                                    ? 'bg-green-100 text-green-600'
-                                    : 'bg-green-500 text-white hover:bg-green-600 shadow-lg shadow-green-200'
-                            }`}
-                            title="Запустить"
-                        >
-                            {isRunning ? (
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                            ) : (
-                                <Flag size={20} fill="currentColor" />
-                            )}
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleRun}
+                                disabled={isRunning}
+                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                                    isRunning
+                                        ? 'bg-green-100 text-green-600'
+                                        : 'bg-green-500 text-white hover:bg-green-600 shadow-lg shadow-green-200'
+                                }`}
+                                title="Запустить"
+                            >
+                                {isRunning ? (
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                    <Flag size={20} fill="currentColor" />
+                                )}
+                            </button>
+                            <button
+                                onClick={handleResetScene}
+                                disabled={isRunning}
+                                className="flex items-center gap-1.5 px-3 h-9 rounded-[10px] text-sm font-medium border border-[#E0E4EB] text-[#1A1D2D] hover:bg-gray-50 disabled:opacity-50"
+                                title="Вернуть спрайты на исходные позиции"
+                            >
+                                <RotateCcw className="w-4 h-4" />
+                                Сброс
+                            </button>
+                        </div>
                     </div>
 
                     <div className="p-4">
