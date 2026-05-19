@@ -237,7 +237,7 @@ ${code}});\n`;
 
 javascriptGenerator.forBlock['event_whenthisspriteclicked'] = function (block: Blockly.Block) {
     const code = javascriptGenerator.statementToCode(block, 'STACK') || '';
-    return `runtime.onSpriteClicked(sprite, async function() {
+    return `runtime.onSpriteClicked(sprite.id, async function() {
 ${code}});\n`;
 };
 

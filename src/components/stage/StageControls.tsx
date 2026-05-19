@@ -6,13 +6,19 @@ import { Play, Square, Maximize2 } from 'lucide-react';
 
 const StageControls: React.FC = () => {
     const { isRunning, setRunning, toggleFullscreen } = useEditorStore();
-    const { currentProject } = useProjectStore();
+    const currentProject = useProjectStore.getState().currentProject;
 
     const handleStart = () => {
         if (currentProject) {
+            console.log('[StageControls] Starting project with', currentProject.sprites.length, 'sprites');
+            currentProject.sprites.forEach(s => {
+                console.log(`[StageControls] Sprite ${s.name}: blocks = ${s.blocks ? 'yes' : 'no'} (${s.blocks?.length || 0} chars)`);
+            });
             runtime.loadProject(currentProject);
             runtime.start();
             setRunning(true);
+        } else {
+            console.warn('[StageControls] No current project to start');
         }
     };
 

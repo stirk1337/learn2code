@@ -96,13 +96,32 @@ const RecordSolutionPage: React.FC = () => {
         testSolution,
     } = useCourseStore();
 
-    const { currentProject, createProject, setProject } = useProjectStore();
-    const { activeTab, selectSprite } = useEditorStore();
+    const { currentProject, createProject, setProject, updateBlocks, updateSprite, updateStage } = useProjectStore();
+    const { activeTab, selectSprite, selectedSpriteId, isStageSelected, setRunning } = useEditorStore();
 
     // Blockly refs
     const blocklyRef = useRef<HTMLDivElement>(null);
     const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
     const hasInitializedRef = useRef(false);
+
+    // Refs для актуальных значений внутри change-listener'a, чтобы не пересоздавать workspace
+    const currentProjectRef = useRef(currentProject);
+    const selectedSpriteIdRef = useRef(selectedSpriteId);
+    const isStageSelectedRef = useRef(isStageSelected);
+    const updateBlocksRef = useRef(updateBlocks);
+
+    useEffect(() => {
+        currentProjectRef.current = currentProject;
+    }, [currentProject]);
+    useEffect(() => {
+        selectedSpriteIdRef.current = selectedSpriteId;
+    }, [selectedSpriteId]);
+    useEffect(() => {
+        isStageSelectedRef.current = isStageSelected;
+    }, [isStageSelected]);
+    useEffect(() => {
+        updateBlocksRef.current = updateBlocks;
+    }, [updateBlocks]);
 
     // Загружаем данные
     useEffect(() => {
@@ -149,6 +168,39 @@ const RecordSolutionPage: React.FC = () => {
             selectSprite(currentProject.sprites[0].id);
         }
     }, [currentProject?.id, selectSprite]);
+
+    // Загружаем блоки при смене спрайта
+    const loadedTargetIdRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!workspaceRef.current || !currentProject) return;
+
+        const targetId = isStageSelected ? currentProject.stage.id : selectedSpriteId;
+
+        if (!targetId) return;
+
+        // Не загружаем если уже загружено для этого спрайта
+        if (loadedTargetIdRef.current === targetId) {
+            console.log('[RecordSolutionPage] Already loaded for target:', targetId, 'skipping');
+            return;
+        }
+
+        // Получаем блоки из проекта
+        const blocks = isStageSelected
+            ? currentProject.stage.blocks
+            : currentProject.sprites.find(s => s.id === selectedSpriteId)?.blocks;
+
+        console.log('[RecordSolutionPage] Loading blocks for target:', targetId, 'blocks exist:', !!blocks, 'length:', blocks?.length);
+
+        loadedTargetIdRef.current = targetId;
+
+        if (blocks) {
+            loadWorkspaceFromXml(workspaceRef.current, blocks);
+        } else {
+            // Если нет блоков - очищаем workspace
+            workspaceRef.current.clear();
+        }
+    }, [currentProject?.id, selectedSpriteId, isStageSelected]);
 
     // Инициализация Blockly
     useEffect(() => {
@@ -198,10 +250,33 @@ const RecordSolutionPage: React.FC = () => {
             }
         }
 
+        // Слушатель изменений - сохраняем блоки в текущий спрайт проекта
+        const saveBlocksToProject = () => {
+            const ws = workspaceRef.current;
+            const project = currentProjectRef.current;
+            if (!ws || !project) return;
+
+            const xml = getWorkspaceXml(ws);
+            const targetId = isStageSelectedRef.current
+                ? project.stage.id
+                : selectedSpriteIdRef.current;
+
+            if (targetId) {
+                console.log('[RecordSolutionPage] Saving blocks to project for target:', targetId);
+                updateBlocksRef.current(targetId, xml);
+            }
+        };
+
+        workspaceRef.current.addChangeListener((event) => {
+            if (!event || event.isUiEvent) return;
+            saveBlocksToProject();
+        });
+
         return () => {
             workspaceRef.current?.dispose();
             workspaceRef.current = null;
             hasInitializedRef.current = false;
+            loadedTargetIdRef.current = null;
         };
     }, [selectedCategories, isDraftMode, taskId]);
 
@@ -256,7 +331,8 @@ const RecordSolutionPage: React.FC = () => {
         }
 
         setIsRunning(true);
-        
+        setRunning(true);
+
         // Запускаем локально
         runtime.loadProject(currentProject);
         try {
@@ -264,7 +340,24 @@ const RecordSolutionPage: React.FC = () => {
         } catch (e) {
             console.error('Runtime error:', e);
         }
-        
+
+        // Синхронизируем финальные позиции спрайтов из runtime в проект,
+        // чтобы превью отражало результат выполнения
+        const finalState = runtime.getState();
+        finalState.sprites.forEach(rs => {
+            updateSprite(rs.id, {
+                x: rs.x,
+                y: rs.y,
+                direction: rs.direction,
+                size: rs.size,
+                visible: rs.visible,
+                currentCostume: rs.currentCostume,
+            });
+        });
+        updateStage({ currentBackdrop: finalState.stage.currentBackdrop });
+
+        setRunning(false);
+
         // Если есть taskId, тестируем через API
         if (taskId && !isNewTask) {
             setIsTesting(true);

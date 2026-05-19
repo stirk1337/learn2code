@@ -60,9 +60,15 @@ export const initBlocklyWorkspace = (
     // Слушатель изменений
     if (onChange) {
         workspace.addChangeListener((event) => {
-            if (!event || event.isUiEvent) return;
+            if (!event) return;
+            if (event.isUiEvent) {
+                console.log('[Blockly] UI event ignored:', event.type);
+                return;
+            }
+            console.log('[Blockly] Change event:', event.type, 'isUiEvent:', event.isUiEvent);
             const xml = Blockly.Xml.workspaceToDom(workspace);
             const xmlText = Blockly.Xml.domToText(xml);
+            console.log('[Blockly] Generated XML, length:', xmlText.length);
             onChange(xmlText);
         });
     }

@@ -510,13 +510,20 @@ export const useProjectStore = create<ProjectStore>()(
 
             // Блоки
             updateBlocks: (targetId, blocksXml) => {
+                console.log('[ProjectStore] updateBlocks called for target:', targetId, 'xml length:', blocksXml?.length);
                 set(state => {
-                    if (!state.currentProject) return state;
+                    if (!state.currentProject) {
+                        console.warn('[ProjectStore] No current project');
+                        return state;
+                    }
                     const project = { ...state.currentProject };
 
                     if (project.stage.id === targetId) {
+                        console.log('[ProjectStore] Saving blocks to stage');
                         project.stage = { ...project.stage, blocks: blocksXml };
                     } else {
+                        const sprite = project.sprites.find(s => s.id === targetId);
+                        console.log('[ProjectStore] Saving blocks to sprite:', sprite?.name);
                         project.sprites = project.sprites.map(s =>
                             s.id === targetId ? { ...s, blocks: blocksXml } : s
                         );
@@ -527,6 +534,7 @@ export const useProjectStore = create<ProjectStore>()(
                         writeUserProjects(project.authorId, projects.filter(p => p.authorId === project.authorId));
                     }
 
+                    console.log('[ProjectStore] Blocks saved, isDirty: true');
                     return { currentProject: project, projects, isDirty: true };
                 });
             },

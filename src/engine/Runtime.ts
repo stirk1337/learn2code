@@ -157,19 +157,26 @@ export class Runtime {
     // Запуск по зелёному флагу — неблокирующий
     start(): Promise<void> {
         return new Promise((resolve) => {
+            console.log('[Runtime] Starting...');
             this.running = true;
             this.timerStart = Date.now();
             this.eventHandlers.clear();
             this.activeThreads.clear();
 
             if (this.project) {
+                console.log('[Runtime] Registering project scripts...');
                 this.registerProjectScripts(this.project);
+            } else {
+                console.warn('[Runtime] No project loaded!');
             }
 
             // Запускаем обработчики зелёного флага
             const handlers = this.eventHandlers.get('flag_clicked') || [];
+            console.log(`[Runtime] Found ${handlers.length} flag clicked handler(s)`);
+
             for (const handler of handlers) {
-                const thread = handler().catch(e => console.error('Thread error:', e));
+                console.log('[Runtime] Executing flag clicked handler...');
+                const thread = handler().catch(e => console.error('[Runtime] Thread error:', e));
                 this.activeThreads.add(thread);
                 thread.finally(() => {
                     this.activeThreads.delete(thread);
@@ -183,9 +190,10 @@ export class Runtime {
 
             this.startRenderLoop();
             this.notifyStateChange();
-            
+
             // Если нет обработчиков, сразу резолвим
             if (handlers.length === 0) {
+                console.warn('[Runtime] No flag clicked handlers found!');
                 resolve();
             }
         });
@@ -237,46 +245,75 @@ export class Runtime {
 
     // Регистрация обработчиков событий
     onFlagClicked(handler: EventHandler) {
+        console.log('[Runtime] Registering flag clicked handler');
         const handlers = this.eventHandlers.get('flag_clicked') || [];
         handlers.push(handler);
         this.eventHandlers.set('flag_clicked', handlers);
+        console.log(`[Runtime] Total flag clicked handlers: ${handlers.length}`);
     }
 
     private registerProjectScripts(project: Project) {
         const registerTarget = (blocksXml: string, spriteId: string) => {
-            if (!blocksXml) return;
+            if (!blocksXml) {
+                console.log(`[Runtime] No blocks XML for target: ${spriteId}`);
+                return;
+            }
             try {
+                console.log(`[Runtime] Registering scripts for target: ${spriteId}`);
+                console.log(`[Runtime] Blocks XML length: ${blocksXml.length}`);
                 const xml = Blockly.utils.xml.textToDom(blocksXml);
                 const workspace = new Blockly.Workspace();
                 Blockly.Xml.domToWorkspace(xml, workspace);
                 const code = javascriptGenerator.workspaceToCode(workspace);
                 workspace.dispose();
+                console.log(`[Runtime] Generated code length: ${code.length}`);
                 if (code.trim()) {
                     this.executeGeneratedCode(code, spriteId);
+                } else {
+                    console.warn(`[Runtime] No code generated for target: ${spriteId}`);
                 }
             } catch (e) {
-                console.error('Failed to register project scripts:', e);
+                console.error('[Runtime] Failed to register project scripts:', e);
             }
         };
 
+        console.log(`[Runtime] Stage blocks: ${project.stage.blocks ? 'yes' : 'no'}`);
         registerTarget(project.stage.blocks, project.stage.id);
-        project.sprites.forEach(sprite => registerTarget(sprite.blocks, sprite.id));
+        project.sprites.forEach(sprite => {
+            console.log(`[Runtime] Sprite ${sprite.name} (${sprite.id}) blocks: ${sprite.blocks ? 'yes' : 'no'}`);
+            registerTarget(sprite.blocks, sprite.id);
+        });
     }
 
     private executeGeneratedCode(code: string, spriteId: string) {
         try {
+            console.log('[Runtime] Executing generated code for sprite:', spriteId);
+            console.log('[Runtime] Generated code:\n', code);
+
             const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (...args: string[]) => (...fnArgs: unknown[]) => Promise<void>;
             const runtime = this;
             const sprite = this.getSpriteApi(spriteId);
             const stage = this.getStageApi();
-            if (!sprite || !stage) return;
+
+            console.log('[Runtime] Sprite API:', sprite ? 'found' : 'NOT FOUND');
+            console.log('[Runtime] Stage API:', stage ? 'found' : 'NOT FOUND');
+
+            if (!sprite || !stage) {
+                console.error('[Runtime] Cannot execute code - missing sprite or stage API');
+                return;
+            }
 
             const fn = new AsyncFunction('runtime', 'sprite', 'stage', code);
-            const thread = fn(runtime, sprite, stage).catch(e => console.error('Generated code error:', e));
+            console.log('[Runtime] Created AsyncFunction, now executing...');
+
+            const thread = fn(runtime, sprite, stage).catch(e => console.error('[Runtime] Generated code error:', e));
             this.activeThreads.add(thread);
-            thread.finally(() => this.activeThreads.delete(thread));
+            thread.finally(() => {
+                console.log('[Runtime] Thread completed for sprite:', spriteId);
+                this.activeThreads.delete(thread);
+            });
         } catch (e) {
-            console.error('Failed to execute generated code:', e);
+            console.error('[Runtime] Failed to execute generated code:', e);
         }
     }
 
@@ -390,9 +427,13 @@ export class Runtime {
             },
 
             move(steps: number) {
+                console.log(`[Runtime] Moving sprite ${sprite.id} by ${steps} steps. Current pos: (${sprite.x}, ${sprite.y}), direction: ${sprite.direction}`);
                 const rad = (sprite.direction - 90) * Math.PI / 180;
-                sprite.x += steps * Math.cos(rad);
-                sprite.y += steps * Math.sin(rad);
+                const dx = steps * Math.cos(rad);
+                const dy = steps * Math.sin(rad);
+                sprite.x += dx;
+                sprite.y += dy;
+                console.log(`[Runtime] New pos: (${sprite.x}, ${sprite.y}), delta: (${dx}, ${dy})`);
                 runtime.notifyStateChange();
             },
 

@@ -7,6 +7,7 @@ import { useEditorStore } from '@/store/useEditorStore';
 import '../../blockly/generators/python';
 
 const BlocklyEditor: React.FC = () => {
+    console.log('[BlocklyEditor] COMPONENT ENTER');
     const containerRef = useRef<HTMLDivElement>(null);
     const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
     const hasInitializedRef = useRef(false);
@@ -16,6 +17,7 @@ const BlocklyEditor: React.FC = () => {
     const updateBlocksRef = useRef(useProjectStore.getState().updateBlocks);
     const { currentProject, updateBlocks } = useProjectStore();
     const { selectedSpriteId, isStageSelected } = useEditorStore();
+    console.log('[BlocklyEditor] Hooks called, currentProject exists:', !!currentProject);
 
     const currentTargetId = isStageSelected
         ? currentProject?.stage.id
@@ -25,10 +27,11 @@ const BlocklyEditor: React.FC = () => {
         ? currentProject?.stage.blocks
         : currentProject?.sprites.find(s => s.id === selectedSpriteId)?.blocks;
 
-    useEffect(() => {
-        currentTargetIdRef.current = currentTargetId ?? null;
-        updateBlocksRef.current = updateBlocks;
-    }, [currentTargetId, updateBlocks]);
+    // Устанавливаем ref синхронно при рендере, чтобы он был доступен в useEffect
+    currentTargetIdRef.current = currentTargetId ?? null;
+    updateBlocksRef.current = updateBlocks;
+
+    console.log('[BlocklyEditor] Render - currentTargetId:', currentTargetId, 'selectedSpriteId:', selectedSpriteId, 'isStageSelected:', isStageSelected, 'ref set to:', currentTargetIdRef.current);
 
     const exportBlocksJson = useCallback(() => {
         const workspace = workspaceRef.current;
@@ -65,12 +68,19 @@ const BlocklyEditor: React.FC = () => {
     useEffect(() => {
         if (!containerRef.current || hasInitializedRef.current) return;
 
+        console.log('[BlocklyEditor] Initializing workspace, currentTargetIdRef:', currentTargetIdRef.current);
+
         workspaceRef.current = initBlocklyWorkspace(containerRef.current, (xml) => {
             const targetId = currentTargetIdRef.current;
-            if (!targetId) return;
+            console.log('[BlocklyEditor] onChange callback - targetId:', targetId, 'xml length:', xml?.length);
+            if (!targetId) {
+                console.warn('[BlocklyEditor] No targetId, skipping save');
+                return;
+            }
 
             loadedTargetIdRef.current = targetId;
             loadedXmlRef.current = xml;
+            console.log('[BlocklyEditor] Calling updateBlocks for target:', targetId);
             updateBlocksRef.current(targetId, xml);
         });
 
