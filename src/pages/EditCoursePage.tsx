@@ -3,14 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, BookOpen, Settings, Save, Eye, Plus, Edit2, Trash2, GripVertical, Loader2 } from 'lucide-react';
 import { useCourseStore } from '@/store/useCourseStore';
 import { useToastStore } from '@/store/useToastStore';
-import { LessonDto } from '@/services/api';
+import { api, LessonDto, TaskDto } from '@/services/api';
 import AddLessonModal from '@/components/modals/AddLessonModal';
 import EditLessonModal from '@/components/modals/EditLessonModal';
 import ConfirmDeleteModal from '@/components/modals/ConfirmDeleteModal';
 
 // Расширенный тип урока с заданиями для UI
 interface LessonWithTasks extends LessonDto {
-    tasks: { id: string; title: string; order: number }[];
+    tasks: TaskDto[];
 }
 
 const EditCoursePage: React.FC = () => {
@@ -24,6 +24,8 @@ const EditCoursePage: React.FC = () => {
     const [editingLesson, setEditingLesson] = useState<LessonDto | null>(null);
     const [isDeleteLessonModalOpen, setIsDeleteLessonModalOpen] = useState(false);
     const [deletingLesson, setDeletingLesson] = useState<LessonDto | null>(null);
+    // Кэш заданий по урокам (lessonId -> tasks[])
+    const [tasksByLesson, setTasksByLesson] = useState<Record<string, TaskDto[]>>({});
 
     const {
         currentCourse,
@@ -37,6 +39,7 @@ const EditCoursePage: React.FC = () => {
         createLesson,
         updateLesson,
         deleteLesson,
+        createTaskDraft,
         clearError,
     } = useCourseStore();
 
@@ -72,10 +75,30 @@ const EditCoursePage: React.FC = () => {
         }
     }, [currentCourse, isNewCourse]);
 
+    // Подгружаем задания для всех уроков курса (для каждого урока — отдельный запрос)
+    useEffect(() => {
+        if (lessons.length === 0) return;
+        let cancelled = false;
+        Promise.all(
+            lessons.map(async (lesson) => {
+                try {
+                    const tasks = await api.getTasks(lesson.id);
+                    return [lesson.id, tasks] as const;
+                } catch {
+                    return [lesson.id, [] as TaskDto[]] as const;
+                }
+            })
+        ).then((entries) => {
+            if (cancelled) return;
+            setTasksByLesson(Object.fromEntries(entries));
+        });
+        return () => { cancelled = true; };
+    }, [lessons]);
+
     // Преобразуем уроки в формат с заданиями
     const lessonsWithTasks: LessonWithTasks[] = lessons.map(lesson => ({
         ...lesson,
-        tasks: [], // TODO: Получать задания из API
+        tasks: (tasksByLesson[lesson.id] ?? []).slice().sort((a, b) => a.order - b.order),
     }));
 
     const toggleLesson = (lessonId: string) => {
@@ -168,8 +191,27 @@ const EditCoursePage: React.FC = () => {
         }
     };
 
-    const handleAddTask = (lessonId: string) => {
-        navigate(`/teacher/course/${courseId}/lesson/${lessonId}/task/new/edit`);
+    const handleAddTask = async (lessonId: string) => {
+        const lesson = lessons.find(l => l.id === lessonId);
+        if (!lesson) return;
+
+        const existingTasks = tasksByLesson[lessonId] ?? [];
+        const order = existingTasks.length + 1;
+
+        const created = await createTaskDraft({ lessonId, order });
+        if (!created) {
+            addToast('Не удалось создать задание', 'error');
+            return;
+        }
+
+        // Обновим локальный кэш заданий, чтобы пользователь увидел новое в списке
+        setTasksByLesson(prev => ({
+            ...prev,
+            [lessonId]: [...(prev[lessonId] ?? []), created],
+        }));
+
+        addToast('Задание создано', 'success');
+        navigate(`/teacher/course/${courseId}/lesson/${lessonId}/task/${created.id}/edit`);
     };
 
     const handleEditTask = (lessonId: string, taskId: string) => {

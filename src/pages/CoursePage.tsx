@@ -47,12 +47,18 @@ const CoursePage: React.FC = () => {
         }
     }, [courseId, fetchCourse, fetchLessons, fetchStudentProgress, user?.id]);
 
-    // Загружаем задачи при раскрытии урока
+    // Загружаем задачи при раскрытии урока и сохраняем в локальный кэш
     useEffect(() => {
         if (expandedLessonId) {
             fetchTasks(expandedLessonId);
         }
     }, [expandedLessonId, fetchTasks]);
+
+    useEffect(() => {
+        if (expandedLessonId && tasks.length >= 0) {
+            setLessonTasks(prev => ({ ...prev, [expandedLessonId]: tasks }));
+        }
+    }, [expandedLessonId, tasks]);
 
     if (!user || user.role !== 'student') return null;
 

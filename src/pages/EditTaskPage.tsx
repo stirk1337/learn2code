@@ -1,33 +1,32 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import * as Blockly from 'blockly';
 import { useCourseStore } from '@/store/useCourseStore';
 import { useToastStore } from '@/store/useToastStore';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { runtime } from '@/engine/Runtime';
-import { 
-    Loader2, 
-    ChevronLeft, 
-    Play, 
-    Save, 
-    AlertCircle, 
-    CheckCircle, 
+import {
+    Loader2,
+    ChevronLeft,
+    Play,
+    Save,
+    AlertCircle,
+    CheckCircle,
     Flag,
-    RotateCcw
+    RotateCcw,
 } from 'lucide-react';
-import { toolboxConfig } from '@/blockly/toolbox';
 import { ScratchTheme } from '@/blockly/theme';
 import StageCanvas from '@/components/stage/StageCanvas';
 import SpriteList from '@/components/sprites/SpriteList';
+import { STAGE_WIDTH, STAGE_HEIGHT } from '@/utils/constants';
 
-// Компонент для отображения превью решения
+// Превью эталонного решения (read-only Blockly)
 interface SolutionPreviewProps {
     solutionId: string;
-    selectedCategories: string[];
 }
 
-const SolutionPreview: React.FC<SolutionPreviewProps> = ({ solutionId, selectedCategories }) => {
+const SolutionPreview: React.FC<SolutionPreviewProps> = ({ solutionId }) => {
     const blocklyRef = useRef<HTMLDivElement>(null);
     const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
     const hasInitializedRef = useRef(false);
@@ -43,16 +42,8 @@ const SolutionPreview: React.FC<SolutionPreviewProps> = ({ solutionId, selectedC
             theme: ScratchTheme,
             renderer: 'zelos',
             scrollbars: true,
-            zoom: {
-                controls: true,
-                wheel: true,
-                startScale: 0.675,
-            },
-            grid: {
-                spacing: 40,
-                length: 2,
-                colour: '#DDD',
-            },
+            zoom: { controls: true, wheel: true, startScale: 0.675 },
+            grid: { spacing: 40, length: 2, colour: '#DDD' },
         });
 
         try {
@@ -102,16 +93,12 @@ const blockCategories = [
 const EditTaskPage: React.FC = () => {
     const { courseId, lessonId, taskId } = useParams<{ courseId: string; lessonId: string; taskId: string }>();
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
-    const isNewTask = taskId === 'new';
-    const solutionIdFromQuery = searchParams.get('solution');
+    const location = useLocation();
 
     const {
         currentTask,
-        isLoading,
         error,
         fetchTask,
-        createTaskDraft,
         updateTask,
         publishTask,
         unpublishTask,
@@ -121,7 +108,7 @@ const EditTaskPage: React.FC = () => {
 
     const { addToast } = useToastStore();
     const { currentProject, createProject } = useProjectStore();
-    const { isRunning, setRunning } = useEditorStore();
+    const { setRunning } = useEditorStore();
 
     const [formData, setFormData] = useState({
         title: '',
@@ -132,57 +119,65 @@ const EditTaskPage: React.FC = () => {
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [isPublishing, setIsPublishing] = useState(false);
-    const [hasSolution, setHasSolution] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
 
-    // Загружаем задание
+    // Решение хранится локально по ключу task_solution_<taskId>.
+    const hasSolution = Boolean(
+        taskId && (currentTask?.solutionCode || localStorage.getItem(`task_solution_python_${taskId}`))
+    );
+
+    // Загружаем задание с бэка
     useEffect(() => {
-        if (!isNewTask && taskId) {
+        if (taskId) {
             fetchTask(taskId);
         }
-    }, [isNewTask, taskId, fetchTask]);
+    }, [taskId, fetchTask]);
 
-    // Обновляем форму при загрузке задания
+    // Заполняем форму при появлении задания на бэке
     useEffect(() => {
-        if (currentTask && !isNewTask) {
-            setFormData({
-                title: currentTask.title || '',
-                description: currentTask.description || '',
-                hint: '',
-            });
-            if (currentTask.solutionCode) {
-                setHasSolution(true);
+        if (currentTask && currentTask.id === taskId) {
+            setFormData(prev => ({
+                title: currentTask.title || prev.title,
+                description: currentTask.description || prev.description,
+                hint: prev.hint,
+            }));
+        }
+    }, [currentTask, taskId]);
+
+    // Если пришли с записи решения — забираем актуальные категории/название из state навигации
+    useEffect(() => {
+        const state = location.state as { draft?: { title?: string; description?: string; hint?: string; selectedCategories?: string[] } } | null;
+        if (state?.draft) {
+            setFormData(prev => ({
+                title: state.draft?.title ?? prev.title,
+                description: state.draft?.description ?? prev.description,
+                hint: state.draft?.hint ?? prev.hint,
+            }));
+            if (state.draft.selectedCategories) {
+                setSelectedCategories(state.draft.selectedCategories);
             }
         }
-    }, [currentTask, isNewTask]);
+    }, [location.state]);
 
-    // Загружаем данные из draft
+    // Подгружаем категории из localStorage по ключу task_draft_<taskId>
     useEffect(() => {
-        if (isNewTask && solutionIdFromQuery) {
-            const draftWithSolution = localStorage.getItem(`task_draft_with_solution`);
-            if (draftWithSolution) {
-                try {
-                    const draft = JSON.parse(draftWithSolution);
-                    setFormData({
-                        title: draft.title || '',
-                        description: draft.description || '',
-                        hint: draft.hint || '',
-                    });
-                    setSelectedCategories(draft.selectedCategories || []);
-                    if (draft.solutionPython) {
-                        setHasSolution(true);
-                    }
-                } catch (e) {
-                    console.error('Failed to parse draft:', e);
-                }
+        if (!taskId) return;
+        const draftJson = localStorage.getItem(`task_draft_${taskId}`);
+        if (!draftJson) return;
+        try {
+            const draft = JSON.parse(draftJson) as { selectedCategories?: string[] };
+            if (draft.selectedCategories && draft.selectedCategories.length > 0) {
+                setSelectedCategories(prev => (prev.length === 0 ? draft.selectedCategories! : prev));
             }
+        } catch (e) {
+            console.error('Failed to parse draft from localStorage:', e);
         }
-    }, [isNewTask, solutionIdFromQuery]);
+    }, [taskId]);
 
     // Инициализация проекта для сцены
     useEffect(() => {
         if (!currentProject) {
-            createProject('Task Preview', 'teacher', 'Teacher');
+            createProject('Task Preview', 'teacher', 'Teacher', { withDefaultSprite: false });
         }
     }, [currentProject, createProject]);
 
@@ -194,15 +189,15 @@ const EditTaskPage: React.FC = () => {
         );
     };
 
-    // Проверка валидности формы
-    const isFormValid = () => {
-        return formData.title.trim() && formData.description.trim() && selectedCategories.length > 0;
-    };
+    const isFormValid = () =>
+        Boolean(formData.title.trim() && formData.description.trim() && selectedCategories.length > 0);
 
     const canRecordSolution = isFormValid();
     const canSave = isFormValid() && hasSolution;
 
     const handleSave = async () => {
+        if (!taskId) return;
+
         if (!canSave) {
             if (!isFormValid()) {
                 addToast('Заполните название, описание и выберите категории блоков', 'error');
@@ -213,51 +208,29 @@ const EditTaskPage: React.FC = () => {
         }
 
         setIsSaving(true);
-
         try {
-            const solutionId = isNewTask ? solutionIdFromQuery : taskId;
-            if (!solutionId) {
-                addToast('Ошибка: не найдено эталонное решение', 'error');
-                setIsSaving(false);
-                return;
-            }
+            const pythonCode = localStorage.getItem(`task_solution_python_${taskId}`) || currentTask?.solutionCode || '';
 
-            const pythonCode = localStorage.getItem(`task_solution_python_${solutionId}`) || '';
-
-            if (isNewTask) {
-                // Создаем черновик
-                const draftData = {
-                    lessonId: lessonId || null,
-                    order: 1,
-                };
-                const task = await createTaskDraft(draftData);
-                
-                if (task) {
-                    // Обновляем черновик полными данными
-                    const updateData = {
-                        title: formData.title,
-                        description: formData.description,
-                        order: 1,
-                        config: task.config,
-                        initialState: task.initialState,
-                        solutionCode: pythonCode,
-                    };
-                    await updateTask(task.id, updateData);
-                    
-                    addToast('Задание создано', 'success');
-                    navigate(`/teacher/course/${courseId}/lesson/${lessonId}/task/${task.id}/edit`);
-                }
-            } else if (taskId) {
-                // Обновляем существующее задание
-                const updateData = {
+            // Сохраняем категории локально, чтобы они подтянулись при следующем открытии
+            localStorage.setItem(
+                `task_draft_${taskId}`,
+                JSON.stringify({
                     title: formData.title,
                     description: formData.description,
-                    order: 1,
-                    config: currentTask?.config || { gridWidth: 10, gridHeight: 10 },
-                    initialState: currentTask?.initialState || { sprites: [] },
-                    solutionCode: pythonCode,
-                };
-                await updateTask(taskId, updateData);
+                    hint: formData.hint,
+                    selectedCategories,
+                })
+            );
+
+            const result = await updateTask(taskId, {
+                title: formData.title,
+                description: formData.description,
+                order: currentTask?.order ?? 1,
+                config: currentTask?.config || { gridWidth: STAGE_WIDTH, gridHeight: STAGE_HEIGHT },
+                initialState: currentTask?.initialState || { sprites: [] },
+                solutionCode: pythonCode,
+            });
+            if (result) {
                 addToast('Изменения сохранены', 'success');
             }
         } catch {
@@ -268,50 +241,35 @@ const EditTaskPage: React.FC = () => {
     };
 
     const handlePublish = async () => {
-        if (!taskId || isNewTask) {
-            addToast('Сначала сохраните задание', 'error');
-            return;
-        }
-        
+        if (!taskId) return;
         setIsPublishing(true);
         try {
             const result = await publishTask(taskId);
-            if (result) {
-                addToast('Задание опубликовано', 'success');
-            }
-        } catch {
-            // Ошибка обрабатывается в store
+            if (result) addToast('Задание опубликовано', 'success');
         } finally {
             setIsPublishing(false);
         }
     };
 
     const handleUnpublish = async () => {
-        if (!taskId || isNewTask) return;
-        
+        if (!taskId) return;
         setIsPublishing(true);
         try {
             const result = await unpublishTask(taskId);
-            if (result) {
-                addToast('Задание снято с публикации', 'success');
-            }
-        } catch {
-            // Ошибка обрабатывается в store
+            if (result) addToast('Задание снято с публикации', 'success');
         } finally {
             setIsPublishing(false);
         }
     };
 
-    // Запуск с тестированием через API
     const handleRunWithTest = async () => {
-        if (!taskId || isNewTask) {
+        if (!taskId) {
             addToast('Сначала сохраните задание', 'error');
             return;
         }
 
-        const solutionId = isNewTask ? solutionIdFromQuery : taskId;
-        const pythonCode = localStorage.getItem(`task_solution_python_${solutionId}`) || '';
-        
+        const pythonCode =
+            localStorage.getItem(`task_solution_python_${taskId}`) || currentTask?.solutionCode || '';
         if (!pythonCode) {
             addToast('Нет кода решения для тестирования', 'error');
             return;
@@ -319,17 +277,12 @@ const EditTaskPage: React.FC = () => {
 
         setIsTesting(true);
         setRunning(true);
-        
         try {
-            // Запускаем локально для визуализации
             if (currentProject) {
                 runtime.loadProject(currentProject);
                 await runtime.start();
             }
-            
-            // Тестируем через API
             const result = await testSolution(taskId, pythonCode);
-            
             if (result?.success) {
                 addToast('✅ Решение прошло тестирование', 'success');
             } else {
@@ -344,29 +297,27 @@ const EditTaskPage: React.FC = () => {
         }
     };
 
-    const handleRecordSolution = async () => {
+    const handleRecordSolution = () => {
         if (!canRecordSolution) {
             addToast('Заполните название, описание и выберите категории блоков', 'error');
             return;
         }
+        if (!taskId || !lessonId) return;
 
-        if (!lessonId) {
-            addToast('Ошибка: не найден ID урока', 'error');
-            return;
-        }
-
-        localStorage.setItem(`task_draft_${taskId || 'new'}`, JSON.stringify({
+        const draftPayload = {
             title: formData.title,
             description: formData.description,
             hint: formData.hint,
             selectedCategories,
-        }));
+        };
 
-        if (isNewTask) {
-            navigate(`/teacher/course/${courseId}/lesson/${lessonId}/task/new/record-solution?draft=true`);
-        } else if (taskId) {
-            navigate(`/teacher/course/${courseId}/lesson/${lessonId}/task/${taskId}/record-solution`);
-        }
+        // Сохраним локально, чтобы при F5 на странице записи данные не терялись
+        localStorage.setItem(`task_draft_${taskId}`, JSON.stringify(draftPayload));
+
+        navigate(
+            `/teacher/course/${courseId}/lesson/${lessonId}/task/${taskId}/record-solution`,
+            { state: { draft: draftPayload } }
+        );
     };
 
     const isPublished = currentTask?.pipelineState === 'published';
@@ -384,7 +335,6 @@ const EditTaskPage: React.FC = () => {
                         <span className="text-sm">Редактор задания</span>
                     </button>
 
-                    {/* Error Message */}
                     {error && (
                         <div className="bg-red-50 border border-red-200 rounded-[8px] px-3 py-2 flex items-center gap-2">
                             <span className="text-red-600 text-sm">{error}</span>
@@ -392,7 +342,6 @@ const EditTaskPage: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Status Badge */}
                     {currentTask && (
                         <div className={`px-3 py-1 rounded-full text-xs font-medium ${
                             isPublished ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
@@ -402,8 +351,7 @@ const EditTaskPage: React.FC = () => {
                     )}
 
                     <div className="flex items-center gap-3">
-                        {/* Publish/Unpublish Button */}
-                        {!isNewTask && currentTask && (
+                        {currentTask && (
                             isPublished ? (
                                 <button
                                     onClick={handleUnpublish}
@@ -589,10 +537,7 @@ const EditTaskPage: React.FC = () => {
                                         </div>
                                     </div>
                                 ) : (
-                                    <SolutionPreview 
-                                        solutionId={isNewTask ? (solutionIdFromQuery || '') : (taskId || '')}
-                                        selectedCategories={selectedCategories}
-                                    />
+                                    <SolutionPreview solutionId={taskId || ''} />
                                 )}
                             </div>
                         </div>
@@ -601,7 +546,6 @@ const EditTaskPage: React.FC = () => {
                         <div className="w-72 bg-white border-l border-[#EEF0F4] p-4 flex flex-col">
                             <h3 className="text-sm font-semibold text-[#1A1D2D] mb-3">Сцена</h3>
 
-                            {/* Stage - Read Only (sprites cannot be moved) */}
                             <div className="relative rounded-[16px] overflow-hidden border border-[#EEF0F4] shadow-sm" style={{ aspectRatio: '4/3' }}>
                                 {currentProject ? (
                                     <StageCanvas readOnly />
@@ -612,8 +556,7 @@ const EditTaskPage: React.FC = () => {
                                 )}
                             </div>
 
-                            {/* Run with Test Button */}
-                            {!isNewTask && hasSolution && (
+                            {hasSolution && (
                                 <button
                                     onClick={handleRunWithTest}
                                     disabled={isTesting}
@@ -623,22 +566,16 @@ const EditTaskPage: React.FC = () => {
                                             : 'bg-green-500 text-white hover:bg-green-600'
                                     }`}
                                 >
-                                    {isTesting ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        <Flag className="w-4 h-4" />
-                                    )}
+                                    {isTesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Flag className="w-4 h-4" />}
                                     {isTesting ? 'Тестирование...' : 'Запустить и протестировать'}
                                 </button>
                             )}
 
-                            {/* Sprites List (Read Only) */}
                             <div className="mt-4 border-t border-[#EEF0F4] pt-4">
                                 <h4 className="text-xs font-semibold text-[#6B7280] uppercase mb-2">Спрайты</h4>
                                 <SpriteList readOnly />
                             </div>
 
-                            {/* Requirements Checklist */}
                             <div className="mt-4 p-3 bg-gray-50 rounded-[12px]">
                                 <h4 className="text-xs font-medium text-[#1A1D2D] mb-2">Требования:</h4>
                                 <div className="space-y-1.5">

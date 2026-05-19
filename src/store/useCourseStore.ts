@@ -57,7 +57,7 @@ interface CourseStore {
     deleteTask: (id: string) => Promise<boolean>;
     publishTask: (id: string) => Promise<TaskDto | null>;
     unpublishTask: (id: string) => Promise<TaskDto | null>;
-    testSolution: (id: string, code: string) => Promise<{ success: boolean; error?: string } | null>;
+    testSolution: (id: string, code: string, overrides?: { initialState?: import('@/services/api').SceneStateDto; config?: import('@/services/api').TaskConfigDto }) => Promise<{ success: boolean; error?: string } | null>;
     setCurrentTask: (task: TaskDto | null) => void;
 
     // Группы
@@ -357,16 +357,22 @@ export const useCourseStore = create<CourseStore>((set, get) => ({
         }
     },
 
-    testSolution: async (id: string, code: string) => {
+    testSolution: async (id: string, code: string, overrides) => {
         set({ isLoading: true, error: null });
         try {
             const { currentTask } = get();
-            if (!currentTask) throw new Error('Задание не загружено');
-            
+
+            const initialState = overrides?.initialState
+                ?? currentTask?.initialState
+                ?? { sprites: [] };
+            const config = overrides?.config
+                ?? currentTask?.config
+                ?? { gridWidth: 0, gridHeight: 0 };
+
             const result = await api.testSolution(id, {
                 code,
-                initialState: currentTask.initialState,
-                config: currentTask.config,
+                initialState,
+                config,
             });
             set({ isLoading: false });
             return { success: result.success, error: result.error || undefined };

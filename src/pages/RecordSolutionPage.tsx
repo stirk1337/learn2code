@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import * as Blockly from 'blockly';
 import { pythonGenerator } from 'blockly/python';
 import { useCourseStore } from '@/store/useCourseStore';
@@ -7,7 +7,7 @@ import { useToastStore } from '@/store/useToastStore';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { runtime } from '@/engine/Runtime';
-import { Loader2, ChevronLeft, Save, AlertCircle, CheckCircle, Flag, RotateCcw, Lock } from 'lucide-react';
+import { Loader2, ChevronLeft, Save, AlertCircle, Flag, RotateCcw, Lock } from 'lucide-react';
 import { toolboxConfig } from '@/blockly/toolbox';
 import { ScratchTheme } from '@/blockly/theme';
 import { loadWorkspaceFromXml, getWorkspaceXml } from '@/blockly/setup';
@@ -19,6 +19,8 @@ import BackdropSelector from '@/components/sprites/BackdropSelector';
 import TabBar from '@/components/editor/TabBar';
 import CostumeEditor from '@/components/editor/CostumeEditor';
 import SoundEditor from '@/components/editor/SoundEditor';
+import type { SceneStateDto, SpriteStateDto, TaskConfigDto } from '@/services/api';
+import { STAGE_WIDTH, STAGE_HEIGHT } from '@/utils/constants';
 
 // Категории блоков
 const blockCategories = [
@@ -76,9 +78,7 @@ interface TaskDraft {
 const RecordSolutionPage: React.FC = () => {
     const { courseId, lessonId, taskId } = useParams<{ courseId: string; lessonId: string; taskId: string }>();
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
-    const isDraftMode = searchParams.get('draft') === 'true';
-    const isNewTask = taskId === 'new' || !taskId;
+    const location = useLocation();
 
     const { addToast } = useToastStore();
     const [isSaving, setIsSaving] = useState(false);
@@ -94,6 +94,7 @@ const RecordSolutionPage: React.FC = () => {
         currentTask,
         fetchTask,
         testSolution,
+        updateTask,
     } = useCourseStore();
 
     const { currentProject, createProject, setProject, updateBlocks, updateSprite, updateStage } = useProjectStore();
@@ -123,51 +124,60 @@ const RecordSolutionPage: React.FC = () => {
         updateBlocksRef.current = updateBlocks;
     }, [updateBlocks]);
 
-    // Загружаем данные
+    // Загружаем данные. Источники в порядке приоритета:
+    // 1) location.state.draft (надёжно, передаётся при переходе с EditTaskPage)
+    // 2) localStorage с ключом task_draft_<taskId>
+    // 3) currentTask с бэка
     useEffect(() => {
         const loadData = async () => {
             setIsLoadingTask(true);
 
-            if (isDraftMode && isNewTask) {
-                const draftJson = localStorage.getItem(`task_draft_new`);
+            const stateDraft = (location.state as { draft?: TaskDraft } | null)?.draft ?? null;
+            let draft: TaskDraft | null = stateDraft;
+            if (!draft && taskId) {
+                const draftJson = localStorage.getItem(`task_draft_${taskId}`);
                 if (draftJson) {
                     try {
-                        const draft: TaskDraft = JSON.parse(draftJson);
-                        setDraftData(draft);
-                        setSelectedCategories(draft.selectedCategories || []);
-                        // Загружаем спрайты из draft если есть
-                        if (draft.sprites && currentProject) {
-                            // TODO: Загрузить спрайты в проект
-                        }
+                        draft = JSON.parse(draftJson) as TaskDraft;
                     } catch (e) {
                         console.error('Failed to parse draft:', e);
                     }
                 }
-                setIsLoadingTask(false);
-            } else if (taskId && !isNewTask) {
-                await fetchTask(taskId);
-                setIsLoadingTask(false);
-            } else {
-                setIsLoadingTask(false);
             }
+            if (draft) {
+                setDraftData(draft);
+                setSelectedCategories(draft.selectedCategories || []);
+            }
+
+            if (taskId) {
+                await fetchTask(taskId);
+            }
+
+            setIsLoadingTask(false);
         };
 
         loadData();
-    }, [isDraftMode, isNewTask, taskId, fetchTask]);
+    }, [taskId, fetchTask, location.state]);
 
-    // Инициализация проекта
+    // Инициализация проекта (без дефолтного спрайта — учитель сам добавит нужные)
     useEffect(() => {
         if (!currentProject) {
-            createProject('Solution Recording', 'teacher', 'Teacher');
+            createProject('Solution Recording', 'teacher', 'Teacher', { withDefaultSprite: false });
         }
     }, [currentProject, createProject]);
 
-    // Выбираем первый спрайт
+    // Автовыбор спрайта: если ни один не выбран, но в проекте есть спрайты — берём первый.
+    // Срабатывает и при первом монтировании, и при добавлении первого спрайта в пустой проект.
     useEffect(() => {
-        if (currentProject && currentProject.sprites.length > 0) {
+        if (!currentProject) return;
+        if (isStageSelected) return;
+        const hasSprites = currentProject.sprites.length > 0;
+        if (!hasSprites) return;
+        const selectedExists = currentProject.sprites.some(s => s.id === selectedSpriteId);
+        if (!selectedExists) {
             selectSprite(currentProject.sprites[0].id);
         }
-    }, [currentProject?.id, selectSprite]);
+    }, [currentProject, selectedSpriteId, isStageSelected, selectSprite]);
 
     // Загружаем блоки при смене спрайта
     const loadedTargetIdRef = useRef<string | null>(null);
@@ -202,15 +212,18 @@ const RecordSolutionPage: React.FC = () => {
         }
     }, [currentProject?.id, selectedSpriteId, isStageSelected]);
 
-    // Инициализация Blockly
+    // Инициализация Blockly. Делаем один раз, когда лоадер ушёл и blocklyRef уже в DOM.
+    // Toolbox обновляем отдельным эффектом ниже при изменении выбранных категорий.
     useEffect(() => {
+        if (isLoadingTask) return;
         if (!blocklyRef.current || hasInitializedRef.current) return;
-        if (selectedCategories.length === 0) return;
 
-        const toolbox = filterToolbox(selectedCategories);
+        const initialToolbox = selectedCategories.length > 0
+            ? filterToolbox(selectedCategories)
+            : toolboxConfig;
 
         workspaceRef.current = Blockly.inject(blocklyRef.current, {
-            toolbox: toolbox,
+            toolbox: initialToolbox,
             theme: ScratchTheme,
             renderer: 'zelos',
             grid: {
@@ -240,8 +253,7 @@ const RecordSolutionPage: React.FC = () => {
         hasInitializedRef.current = true;
 
         // Загружаем сохраненное решение если есть
-        const storageKey = isDraftMode ? `task_draft_solution_new` : `task_solution_${taskId}`;
-        const savedSolution = localStorage.getItem(storageKey);
+        const savedSolution = taskId ? localStorage.getItem(`task_solution_${taskId}`) : null;
         if (savedSolution) {
             try {
                 loadWorkspaceFromXml(workspaceRef.current, savedSolution);
@@ -262,7 +274,6 @@ const RecordSolutionPage: React.FC = () => {
                 : selectedSpriteIdRef.current;
 
             if (targetId) {
-                console.log('[RecordSolutionPage] Saving blocks to project for target:', targetId);
                 updateBlocksRef.current(targetId, xml);
             }
         };
@@ -278,7 +289,22 @@ const RecordSolutionPage: React.FC = () => {
             hasInitializedRef.current = false;
             loadedTargetIdRef.current = null;
         };
-    }, [selectedCategories, isDraftMode, taskId]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [taskId, isLoadingTask]);
+
+    // Подменяем toolbox при изменении выбранных категорий
+    useEffect(() => {
+        const ws = workspaceRef.current;
+        if (!ws || !hasInitializedRef.current) return;
+        const next = selectedCategories.length > 0
+            ? filterToolbox(selectedCategories)
+            : toolboxConfig;
+        try {
+            ws.updateToolbox(next as unknown as Element);
+        } catch (e) {
+            console.error('[RecordSolutionPage] Failed to update toolbox:', e);
+        }
+    }, [selectedCategories]);
 
     // Обновляем размер Blockly при смене таба
     useEffect(() => {
@@ -314,17 +340,39 @@ const RecordSolutionPage: React.FC = () => {
             setProject(lockedState.project);
             addToast('Состояние сброшено', 'info');
         } else {
-            addToast('Нет зафиксированного состояния', 'warning');
+            addToast('Нет зафиксированного состояния', 'info');
         }
+    };
+
+    // Конфиг сцены — фиксированные размеры превью 480×360
+    const buildConfig = (): TaskConfigDto => ({
+        gridWidth: STAGE_WIDTH,
+        gridHeight: STAGE_HEIGHT,
+    });
+
+    // Преобразуем спрайты проекта в SceneStateDto для бэкенда
+    const buildInitialState = (): SceneStateDto => {
+        if (!currentProject) return { sprites: [] };
+        const sprites: SpriteStateDto[] = currentProject.sprites.map(s => ({
+            type: s.type ?? 'cat',
+            gridX: Math.round(s.x),
+            gridY: Math.round(s.y),
+            visible: s.visible,
+        }));
+        return { sprites };
     };
 
     // Запуск кода с тестированием через API
     const handleRunWithTest = async () => {
         if (!workspaceRef.current || !currentProject) return;
+        if (!taskId) {
+            addToast('Не указан id задания', 'error');
+            return;
+        }
 
         // Генерируем Python код из блоков
         const pythonCode = pythonGenerator.workspaceToCode(workspaceRef.current);
-        
+
         if (!pythonCode.trim()) {
             addToast('Нет кода для выполнения', 'error');
             return;
@@ -333,7 +381,7 @@ const RecordSolutionPage: React.FC = () => {
         setIsRunning(true);
         setRunning(true);
 
-        // Запускаем локально
+        // Запускаем локально для визуализации
         runtime.loadProject(currentProject);
         try {
             await runtime.start();
@@ -357,29 +405,30 @@ const RecordSolutionPage: React.FC = () => {
         updateStage({ currentBackdrop: finalState.stage.currentBackdrop });
 
         setRunning(false);
-
-        // Если есть taskId, тестируем через API
-        if (taskId && !isNewTask) {
-            setIsTesting(true);
-            try {
-                const result = await testSolution(taskId, pythonCode);
-                if (result?.success) {
-                    addToast('✅ Решение прошло тестирование на сервере', 'success');
-                } else {
-                    addToast(result?.error || '❌ Решение не прошло тестирование', 'error');
-                }
-            } catch (e) {
-                console.error('API test error:', e);
-            } finally {
-                setIsTesting(false);
-            }
-        }
-        
         setIsRunning(false);
+
+        // Тестируем через API
+        setIsTesting(true);
+        try {
+            const result = await testSolution(taskId, pythonCode, {
+                initialState: buildInitialState(),
+                config: buildConfig(),
+            });
+            if (result?.success) {
+                addToast('✅ Решение прошло тестирование на сервере', 'success');
+            } else {
+                addToast(result?.error || '❌ Решение не прошло тестирование', 'error');
+            }
+        } catch (e) {
+            console.error('API test error:', e);
+            addToast('Ошибка при тестировании', 'error');
+        } finally {
+            setIsTesting(false);
+        }
     };
 
     const handleSaveSolution = async () => {
-        if (!workspaceRef.current || !courseId || !lessonId) return;
+        if (!workspaceRef.current || !courseId || !lessonId || !taskId) return;
 
         setIsSaving(true);
 
@@ -388,37 +437,44 @@ const RecordSolutionPage: React.FC = () => {
             const xml = getWorkspaceXml(workspaceRef.current);
             const pythonCode = pythonGenerator.workspaceToCode(workspaceRef.current);
 
-            // Генерируем ID для нового задания если draft
-            const solutionId = isDraftMode
-                ? `draft_${Date.now()}`
-                : taskId;
+            // Сохраняем решение в localStorage (для превью на странице редактирования)
+            localStorage.setItem(`task_solution_${taskId}`, xml || '');
+            localStorage.setItem(`task_solution_python_${taskId}`, pythonCode || '');
 
-            if (!solutionId) {
-                addToast('Ошибка: не удалось определить ID задания', 'error');
-                setIsSaving(false);
-                return;
+            // Сохраняем актуальные категории, чтобы они подтянулись при возврате
+            if (draftData) {
+                localStorage.setItem(
+                    `task_draft_${taskId}`,
+                    JSON.stringify({
+                        title: draftData.title,
+                        description: draftData.description,
+                        hint: draftData.hint,
+                        selectedCategories,
+                    })
+                );
             }
 
-            // Сохраняем решение в localStorage
-            localStorage.setItem(`task_solution_${solutionId}`, xml || '');
-            localStorage.setItem(`task_solution_python_${solutionId}`, pythonCode || '');
+            // Сохраняем задание на бэкенде: title/description (из черновика или с бэка),
+            // initialState из текущей сцены, config 480×360, solutionCode = python.
+            const title = draftData?.title || currentTask?.title || '';
+            const description = draftData?.description || currentTask?.description || '';
+            const order = currentTask?.order ?? 1;
 
-            // Если draft mode - сохраняем draft данные с ID решения
-            if (isDraftMode && draftData) {
-                const draftWithSolution = {
-                    ...draftData,
-                    solutionId,
-                    solutionXml: xml,
-                    solutionPython: pythonCode,
-                };
-                localStorage.setItem(`task_draft_with_solution`, JSON.stringify(draftWithSolution));
+            const result = await updateTask(taskId, {
+                title,
+                description,
+                order,
+                config: buildConfig(),
+                initialState: buildInitialState(),
+                solutionCode: pythonCode,
+            });
 
+            if (result) {
                 addToast('Эталонное решение сохранено', 'success');
-                navigate(`/teacher/course/${courseId}/lesson/${lessonId}/task/new/edit?solution=${solutionId}`);
-            } else if (taskId) {
-                // Сохраняем для существующего задания
-                addToast('Эталонное решение сохранено', 'success');
-                navigate(`/teacher/course/${courseId}/lesson/${lessonId}/task/${taskId}/edit`);
+                navigate(
+                    `/teacher/course/${courseId}/lesson/${lessonId}/task/${taskId}/edit`,
+                    { state: { draft: { ...draftData, selectedCategories } } }
+                );
             }
         } catch (error) {
             console.error('Error saving solution:', error);
@@ -428,20 +484,16 @@ const RecordSolutionPage: React.FC = () => {
         }
     };
 
-    // Проверяем валидность
+    // Валидность: страница доступна, если есть название и описание задания.
+    // Категории блоков не обязательны (учитель мог их пока не выбрать).
     const isValid = () => {
-        if (isDraftMode && draftData) {
-            return (
-                draftData.title?.trim() &&
-                draftData.description?.trim() &&
-                draftData.selectedCategories?.length > 0
-            );
+        if (draftData) {
+            return Boolean(draftData.title?.trim() && draftData.description?.trim());
         }
-        return (
-            currentTask?.title?.trim() &&
-            currentTask?.description?.trim() &&
-            selectedCategories.length > 0
-        );
+        if (currentTask) {
+            return Boolean(currentTask.title?.trim() && currentTask.description?.trim());
+        }
+        return false;
     };
 
     // Показываем лоадер
@@ -490,8 +542,7 @@ const RecordSolutionPage: React.FC = () => {
                         <p className="text-amber-700 text-sm mb-4">
                             Перед записью решения необходимо заполнить:<br />
                             • Название задания<br />
-                            • Описание задания<br />
-                            • Выбрать хотя бы одну категорию блоков
+                            • Описание задания
                         </p>
                         <button
                             onClick={() => navigate(-1)}
@@ -520,7 +571,7 @@ const RecordSolutionPage: React.FC = () => {
                     <div className="h-6 w-px bg-[#EEF0F4]" />
                     <div>
                         <div className="text-sm text-[#734DE6] font-medium">
-                            {isDraftMode ? 'Новое задание' : (currentTask?.title || 'Запись решения')}
+                            {draftData?.title || currentTask?.title || 'Запись решения'}
                         </div>
                         <div className="text-sm text-[#1A1D2D] font-semibold">
                             Доступно {selectedCategories.length} категорий блоков
@@ -615,7 +666,7 @@ const RecordSolutionPage: React.FC = () => {
                 </div>
 
                 {/* Right Panel - Stage & Sprites */}
-                <div className="w-80 flex flex-col border-l border-[#EEF0F4] bg-white shrink-0">
+                <div className="w-[520px] flex flex-col border-l border-[#EEF0F4] bg-white shrink-0">
                     {/* Stage Controls */}
                     <div className="flex items-center justify-between px-4 py-2 border-b border-[#EEF0F4]">
                         <div className="flex items-center gap-2">
@@ -650,9 +701,12 @@ const RecordSolutionPage: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Stage */}
+                    {/* Stage 480×360 */}
                     <div className="p-4">
-                        <div className="relative rounded-[16px] overflow-hidden border border-[#EEF0F4] shadow-sm" style={{ aspectRatio: '4/3' }}>
+                        <div
+                            className="relative rounded-[16px] overflow-hidden border border-[#EEF0F4] shadow-sm mx-auto"
+                            style={{ width: STAGE_WIDTH, height: STAGE_HEIGHT }}
+                        >
                             <StageCanvas />
                         </div>
                     </div>

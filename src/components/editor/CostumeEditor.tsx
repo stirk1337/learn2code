@@ -4,24 +4,28 @@ import { useEditorStore } from '@/store/useEditorStore';
 import { Costume } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { fileToDataUrl, getImageDimensions } from '@/utils/helpers';
-import { Upload, Trash2, Copy, Edit3, Plus } from 'lucide-react';
+import { Upload, Trash2, Copy, Plus } from 'lucide-react';
+import { SPRITE_TYPES } from '@/utils/spriteTypes';
+import EmptySpritePicker from './EmptySpritePicker';
 
 const CostumeEditor: React.FC = () => {
-    const { currentProject, addCostume, removeCostume, updateCostume, reorderCostumes } = useProjectStore();
+    const { currentProject, addCostume, removeCostume, updateCostume, reorderCostumes, setSpriteType } = useProjectStore();
     const { selectedSpriteId, isStageSelected } = useEditorStore();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedCostumeIdx, setSelectedCostumeIdx] = useState<number>(0);
+    const [showTypePicker, setShowTypePicker] = useState(false);
 
     const target = isStageSelected
         ? currentProject?.stage
         : currentProject?.sprites.find(s => s.id === selectedSpriteId);
 
-    if (!target) return <div className="flex items-center justify-center h-full text-gray-400">Выберите спрайт</div>;
+    if (!target) return <EmptySpritePicker title="Выберите спрайт" description="Добавьте на сцену один из готовых спрайтов и редактируйте его костюм:" />;
 
     const costumes = target.costumes;
     const targetId = target.id;
     const isStage = 'isStage' in target && target.isStage;
     const label = isStage ? 'Фон' : 'Костюм';
+    const currentSpriteType = !isStage && 'type' in target ? target.type : undefined;
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -151,6 +155,54 @@ const CostumeEditor: React.FC = () => {
                                 className="border border-gray-300 rounded px-2 py-1 text-sm w-40"
                             />
                         </div>
+
+                        {!isStage && (
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowTypePicker(v => !v)}
+                                    className="px-3 py-1 text-sm rounded-[8px] border border-[#E0E4EB] text-[#1A1D2D] bg-white hover:bg-gray-50 transition-colors"
+                                    title="Выбрать тип спрайта"
+                                >
+                                    Выбрать костюм
+                                    {currentSpriteType && (
+                                        <span className="ml-2 text-xs text-[#6B7280]">
+                                            ({SPRITE_TYPES.find(t => t.type === currentSpriteType)?.name})
+                                        </span>
+                                    )}
+                                </button>
+
+                                {showTypePicker && (
+                                    <div className="absolute z-20 mt-2 left-0 bg-white border border-[#E0E4EB] rounded-[12px] shadow-lg p-2 flex gap-2">
+                                        {SPRITE_TYPES.map(t => {
+                                            const isSelected = currentSpriteType === t.type;
+                                            return (
+                                                <button
+                                                    key={t.type}
+                                                    onClick={() => {
+                                                        setSpriteType(targetId, t.type);
+                                                        setSelectedCostumeIdx(0);
+                                                        setShowTypePicker(false);
+                                                    }}
+                                                    className={`flex flex-col items-center gap-1 p-2 rounded-[8px] w-24 transition-colors ${
+                                                        isSelected
+                                                            ? 'bg-[#EDE7FF] border border-[#734DE6]'
+                                                            : 'border border-transparent hover:bg-gray-50'
+                                                    }`}
+                                                >
+                                                    <img
+                                                        src={t.assetUrl}
+                                                        alt={t.name}
+                                                        className="w-12 h-12 object-contain"
+                                                        draggable={false}
+                                                    />
+                                                    <span className="text-xs font-medium text-[#1A1D2D]">{t.name}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         <div className="flex items-center gap-1 ml-auto">
                             <button

@@ -488,7 +488,7 @@ class ApiService {
     }
 
     async updateTask(id: string, data: UpdateTaskRequest): Promise<void> {
-        await this.put(`/Tasks/${id}`, data);
+        await this.post(`/Tasks/${id}`, data);
     }
 
     async deleteTask(id: string): Promise<void> {

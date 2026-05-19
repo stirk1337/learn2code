@@ -29,10 +29,15 @@ export interface Sound {
     sampleRate?: number;
 }
 
+import type { SpriteType } from '@/services/api';
+
+export type SpriteKind = SpriteType;
+
 export interface SpriteTarget {
     id: string;
     name: string;
     isStage: false;
+    type?: SpriteKind; // Тип спрайта для бэкенда: cat / apple / wall
     x: number;
     y: number;
     size: number;

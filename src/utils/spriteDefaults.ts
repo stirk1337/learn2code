@@ -53,6 +53,7 @@ export const createDefaultSprite = (partial?: Partial<SpriteTarget>): SpriteTarg
         id,
         name: partial?.name || 'Спрайт1',
         isStage: false,
+        type: 'cat',
         x: 0,
         y: 0,
         size: DEFAULT_SPRITE_SIZE,
@@ -91,7 +92,8 @@ export const createDefaultStage = (): StageTarget => ({
 export const createDefaultProject = (
     name: string,
     authorId: string,
-    authorName: string
+    authorName: string,
+    options?: { withDefaultSprite?: boolean }
 ): Project => ({
     id: uuidv4(),
     name,
@@ -99,7 +101,7 @@ export const createDefaultProject = (
     authorName,
     description: '',
     stage: createDefaultStage(),
-    sprites: [createDefaultSprite({ name: 'Спрайт1' })],
+    sprites: options?.withDefaultSprite === false ? [] : [createDefaultSprite({ name: 'Спрайт1' })],
     extensions: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

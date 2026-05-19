@@ -5,6 +5,7 @@ import { Sound } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { fileToDataUrl } from '@/utils/helpers';
 import { Play, Pause, Trash2, Copy, Plus, Upload, Volume2 } from 'lucide-react';
+import EmptySpritePicker from './EmptySpritePicker';
 
 const SoundEditor: React.FC = () => {
     const { currentProject, addSound, removeSound, updateSound } = useProjectStore();
@@ -19,10 +20,8 @@ const SoundEditor: React.FC = () => {
         ? currentProject?.stage
         : currentProject?.sprites.find(s => s.id === selectedSpriteId);
 
-    if (!target) return <div className="flex items-center justify-center h-full text-gray-400">Выберите спрайт</div>;
-
-    const sounds = target.sounds;
-    const targetId = target.id;
+    const sounds = target?.sounds ?? [];
+    const targetId = target?.id ?? '';
     const selectedSound = sounds[selectedSoundIdx] || null;
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -159,6 +158,8 @@ const SoundEditor: React.FC = () => {
         ctx.stroke();
 
     }, [selectedSound]);
+
+    if (!target) return <EmptySpritePicker title="Выберите спрайт" description="Добавьте на сцену один из готовых спрайтов и редактируйте его звуки:" />;
 
     return (
         <div className="flex h-full">

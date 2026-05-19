@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import { Project, SpriteTarget, StageTarget, Costume, Sound, ScratchVariable, ScratchList } from '@/types';
+import { Project, SpriteTarget, StageTarget, Costume, Sound, ScratchVariable, ScratchList, SpriteKind } from '@/types';
 import { createDefaultProject, createDefaultSprite, createDefaultStage } from '@/utils/spriteDefaults';
 import { LOCAL_STORAGE_KEYS } from '@/utils/constants';
+import { getSpriteTypeDef } from '@/utils/spriteTypes';
 
 interface ProjectStore {
     // Текущий проект
@@ -18,7 +19,7 @@ interface ProjectStore {
     // Проект
     setActiveUser: (userId: string | null) => void;
     hydrateProjectsForUser: (userId: string) => void;
-    createProject: (name: string, authorId: string, authorName: string) => Project;
+    createProject: (name: string, authorId: string, authorName: string, options?: { withDefaultSprite?: boolean }) => Project;
     loadProject: (projectId: string) => void;
     setProject: (project: Project) => void;
     saveProject: () => void;
@@ -52,6 +53,12 @@ interface ProjectStore {
 
     // Блоки (Blockly XML)
     updateBlocks: (targetId: string, blocksXml: string) => void;
+
+    // Тип спрайта (cat / apple / wall) — заменяет костюмы на каноничный набор
+    setSpriteType: (spriteId: string, type: SpriteKind) => void;
+
+    // Создать спрайт сразу нужного типа (cat / apple / wall) и вернуть его id
+    addSpriteOfType: (type: SpriteKind, partial?: Partial<SpriteTarget>) => string;
 
     // Переменные
     addVariable: (targetId: string, variable: ScratchVariable) => void;
@@ -92,8 +99,8 @@ export const useProjectStore = create<ProjectStore>()(
                 set({ activeUserId: userId, projects, currentProject: null, isDirty: false });
             },
 
-            createProject: (name, authorId, authorName) => {
-                const project = createDefaultProject(name, authorId, authorName);
+            createProject: (name, authorId, authorName, options) => {
+                const project = createDefaultProject(name, authorId, authorName, options);
                 set(state => {
                     const projects = [...state.projects.filter(p => p.id !== project.id), project];
                     writeUserProjects(authorId, projects.filter(p => p.authorId === authorId));
@@ -506,6 +513,68 @@ export const useProjectStore = create<ProjectStore>()(
 
                     return { currentProject: project, isDirty: true };
                 });
+            },
+
+            // Тип спрайта (cat / apple / wall): подменяет единственный костюм
+            setSpriteType: (spriteId, type) => {
+                const def = getSpriteTypeDef(type);
+                const costume: Costume = {
+                    id: uuidv4(),
+                    name: def.costumeName,
+                    dataUrl: def.assetUrl,
+                    width: def.width,
+                    height: def.height,
+                    rotationCenterX: def.width / 2,
+                    rotationCenterY: def.height / 2,
+                };
+                set(state => {
+                    if (!state.currentProject) return state;
+                    const currentProject = {
+                        ...state.currentProject,
+                        sprites: state.currentProject.sprites.map(s =>
+                            s.id === spriteId
+                                ? { ...s, type, costumes: [costume], currentCostume: 0 }
+                                : s
+                        ),
+                    };
+                    const projects = state.projects.map(p => p.id === currentProject.id ? currentProject : p);
+                    if (currentProject.authorId) {
+                        writeUserProjects(currentProject.authorId, projects.filter(p => p.authorId === currentProject.authorId));
+                    }
+                    return { currentProject, projects, isDirty: true };
+                });
+            },
+
+            // Создать спрайт сразу нужного типа и подставить ему канонический костюм
+            addSpriteOfType: (type, partial) => {
+                const def = getSpriteTypeDef(type);
+                const sprite = createDefaultSprite({
+                    name: partial?.name || def.name,
+                    type,
+                    costumes: [{
+                        id: uuidv4(),
+                        name: def.costumeName,
+                        dataUrl: def.assetUrl,
+                        width: def.width,
+                        height: def.height,
+                        rotationCenterX: def.width / 2,
+                        rotationCenterY: def.height / 2,
+                    }],
+                    ...partial,
+                });
+                set(state => {
+                    if (!state.currentProject) return state;
+                    const currentProject = {
+                        ...state.currentProject,
+                        sprites: [...state.currentProject.sprites, sprite],
+                    };
+                    const projects = state.projects.map(p => p.id === currentProject.id ? currentProject : p);
+                    if (currentProject.authorId) {
+                        writeUserProjects(currentProject.authorId, projects.filter(p => p.authorId === currentProject.authorId));
+                    }
+                    return { currentProject, projects, isDirty: true };
+                });
+                return sprite.id;
             },
 
             // Блоки
