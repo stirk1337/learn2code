@@ -10,6 +10,7 @@ import CoursePage from '@/pages/CoursePage';
 import EditCoursePage from '@/pages/EditCoursePage';
 import EditTaskPage from '@/pages/EditTaskPage';
 import RecordSolutionPage from '@/pages/RecordSolutionPage';
+import StudentTaskPage from '@/pages/StudentTaskPage';
 import StartPage from "@/pages/StartPage";
 import ToastContainer from '@/components/ToastContainer';
 import AdminDashboard from '@/pages/AdminDashboard';
@@ -61,6 +62,11 @@ const App: React.FC = () => {
       <Route path="/course/:courseId" element={
         isAuthenticated && user?.role === 'student'
           ? <CoursePage />
+          : <Navigate to="/" />
+      } />
+      <Route path="/student/task/:taskId" element={
+        isAuthenticated && user?.role === 'student'
+          ? <StudentTaskPage />
           : <Navigate to="/" />
       } />
       <Route path="/editor/:taskId?" element={

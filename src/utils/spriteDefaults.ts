@@ -106,3 +106,41 @@ export const createDefaultProject = (
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
 });
+
+
+import type { SceneStateDto } from '@/services/api';
+import { getSpriteTypeDef } from './spriteTypes';
+
+// Создаёт спрайт по type/gridX/gridY/visible (из бэкендового initialState).
+// Использует канонический костюм из spriteTypes.
+export const createSpriteFromState = (state: NonNullable<SceneStateDto['sprites']>[number]): SpriteTarget => {
+    const def = getSpriteTypeDef(state.type);
+    return createDefaultSprite({
+        name: def.name,
+        type: state.type,
+        x: state.gridX,
+        y: state.gridY,
+        visible: state.visible,
+        costumes: [{
+            id: uuidv4(),
+            name: def.costumeName,
+            dataUrl: def.assetUrl,
+            width: def.width,
+            height: def.height,
+            rotationCenterX: def.width / 2,
+            rotationCenterY: def.height / 2,
+        }],
+    });
+};
+
+export const buildProjectFromSceneState = (
+    name: string,
+    authorId: string,
+    authorName: string,
+    sceneState: SceneStateDto | null | undefined
+): Project => {
+    const project = createDefaultProject(name, authorId, authorName, { withDefaultSprite: false });
+    const sprites = sceneState?.sprites || [];
+    project.sprites = sprites.map(s => createSpriteFromState(s));
+    return project;
+};

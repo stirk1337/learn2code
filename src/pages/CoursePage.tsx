@@ -131,7 +131,7 @@ const CoursePage: React.FC = () => {
     };
 
     const handleStartTask = (taskId: string) => {
-        navigate(`/editor/${taskId}`);
+        navigate(`/student/task/${taskId}`);
     };
 
     const courseEmoji = '🐱';
