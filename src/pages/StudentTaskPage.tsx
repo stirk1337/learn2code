@@ -37,12 +37,31 @@ const StudentTaskPage: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const { currentProject, setProject } = useProjectStore();
+    const { currentProject, setProject, updateBlocks } = useProjectStore();
     const { setRunning, isRunning } = useEditorStore();
 
     const blocklyRef = useRef<HTMLDivElement>(null);
     const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
     const hasInitializedRef = useRef(false);
+
+    // Refs для актуальных значений в change-listener'е
+    const updateBlocksRef = useRef(updateBlocks);
+    const taskIdRef = useRef<string | undefined>(taskId);
+    const primaryTargetIdRef = useRef<string | null>(null);
+    useEffect(() => {
+        updateBlocksRef.current = updateBlocks;
+    }, [updateBlocks]);
+    useEffect(() => {
+        taskIdRef.current = taskId;
+    }, [taskId]);
+    useEffect(() => {
+        // Привязываем XML к первому спрайту проекта (или к stage, если спрайтов нет)
+        if (!currentProject) {
+            primaryTargetIdRef.current = null;
+            return;
+        }
+        primaryTargetIdRef.current = currentProject.sprites[0]?.id || currentProject.stage.id;
+    }, [currentProject]);
 
     // Загрузка задания + черновика. Если черновика нет — создаём через POST.
     useEffect(() => {
@@ -95,7 +114,8 @@ const StudentTaskPage: React.FC = () => {
         };
     }, [taskId, setProject]);
 
-    // Инициализация Blockly после загрузки
+    // Инициализация Blockly — только после загрузки задания. Не зависим от draft,
+    // чтобы handleSaveDraft не пересоздавал воркспейс.
     useEffect(() => {
         if (isLoading) return;
         if (!blocklyRef.current || hasInitializedRef.current) return;
@@ -120,22 +140,45 @@ const StudentTaskPage: React.FC = () => {
         });
         hasInitializedRef.current = true;
 
-        // Загружаем сохранённое решение из черновика, если есть
-        const savedXml = draft?.result && (draft as unknown as { blocklyXml?: string }).blocklyXml;
+        // Восстанавливаем XML из localStorage (бэкенд в SubmissionDto его не возвращает)
+        const savedXml = taskIdRef.current
+            ? localStorage.getItem(`student_solution_${taskIdRef.current}`)
+            : null;
         if (savedXml) {
             try {
-                loadWorkspaceFromXml(workspaceRef.current, savedXml as string);
+                loadWorkspaceFromXml(workspaceRef.current, savedXml);
             } catch (e) {
                 console.error('Failed to load saved blockly xml:', e);
             }
         }
+
+        // Слушатель изменений: кэшируем XML в localStorage и обновляем блоки
+        // у первого спрайта проекта, чтобы runtime их видел при запуске.
+        const persistBlocks = () => {
+            const ws = workspaceRef.current;
+            if (!ws) return;
+            const xml = getWorkspaceXml(ws);
+            const id = taskIdRef.current;
+            if (id) {
+                localStorage.setItem(`student_solution_${id}`, xml || '');
+            }
+            const targetId = primaryTargetIdRef.current;
+            if (targetId) {
+                updateBlocksRef.current(targetId, xml || '');
+            }
+        };
+
+        workspaceRef.current.addChangeListener((event) => {
+            if (!event || event.isUiEvent) return;
+            persistBlocks();
+        });
 
         return () => {
             workspaceRef.current?.dispose();
             workspaceRef.current = null;
             hasInitializedRef.current = false;
         };
-    }, [isLoading, draft]);
+    }, [isLoading]);
 
     const handleRun = async () => {
         const project = useProjectStore.getState().currentProject;
