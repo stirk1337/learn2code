@@ -24,6 +24,8 @@ const EditCoursePage: React.FC = () => {
     const [editingLesson, setEditingLesson] = useState<LessonDto | null>(null);
     const [isDeleteLessonModalOpen, setIsDeleteLessonModalOpen] = useState(false);
     const [deletingLesson, setDeletingLesson] = useState<LessonDto | null>(null);
+    const [isDeleteTaskModalOpen, setIsDeleteTaskModalOpen] = useState(false);
+    const [deletingTask, setDeletingTask] = useState<{ lessonId: string; task: TaskDto } | null>(null);
     // Кэш заданий по урокам (lessonId -> tasks[])
     const [tasksByLesson, setTasksByLesson] = useState<Record<string, TaskDto[]>>({});
 
@@ -40,6 +42,7 @@ const EditCoursePage: React.FC = () => {
         updateLesson,
         deleteLesson,
         createTaskDraft,
+        deleteTask,
         clearError,
     } = useCourseStore();
 
@@ -217,6 +220,27 @@ const EditCoursePage: React.FC = () => {
 
     const handleEditTask = (lessonId: string, taskId: string) => {
         navigate(`/teacher/course/${courseId}/lesson/${lessonId}/task/${taskId}/edit`);
+    };
+
+    const handleDeleteTaskClick = (lessonId: string, task: TaskDto) => {
+        setDeletingTask({ lessonId, task });
+        setIsDeleteTaskModalOpen(true);
+    };
+
+    const handleConfirmDeleteTask = async () => {
+        if (!deletingTask) return;
+        const { lessonId, task } = deletingTask;
+        const success = await deleteTask(task.id);
+        if (success) {
+            // Чистим локальный кэш заданий, чтобы UI обновился сразу
+            setTasksByLesson((prev) => {
+                const list = prev[lessonId] ?? [];
+                return { ...prev, [lessonId]: list.filter((t) => t.id !== task.id) };
+            });
+            addToast('Задание удалено', 'success');
+            setIsDeleteTaskModalOpen(false);
+            setDeletingTask(null);
+        }
     };
 
     return (
@@ -433,13 +457,23 @@ const EditCoursePage: React.FC = () => {
                                                                     <div className="w-2 h-2 rounded-full bg-[#E0E4EB]" />
                                                                     <span className="text-sm text-[#1A1D2D]">{task.title || 'Без названия'}</span>
                                                                 </div>
-                                                                <button
-                                                                    onClick={() => handleEditTask(lesson.id, task.id)}
-                                                                    className="flex items-center gap-1 bg-[#14B8A6] text-white px-2.5 py-1 rounded-[6px] text-xs hover:bg-[#0d9488] transition-colors"
-                                                                >
-                                                                    Редактировать
-                                                                    <ChevronLeft className="w-3 h-3 rotate-180" />
-                                                                </button>
+                                                                <div className="flex items-center gap-2">
+                                                                    <button
+                                                                        onClick={() => handleEditTask(lesson.id, task.id)}
+                                                                        className="flex items-center gap-1 bg-[#14B8A6] text-white px-2.5 py-1 rounded-[6px] text-xs hover:bg-[#0d9488] transition-colors"
+                                                                    >
+                                                                        Редактировать
+                                                                        <ChevronLeft className="w-3 h-3 rotate-180" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDeleteTaskClick(lesson.id, task)}
+                                                                        className="p-1.5 text-[#6B7280] hover:text-red-500 hover:bg-red-50 rounded-[6px] transition-colors"
+                                                                        title="Удалить задание"
+                                                                        aria-label="Удалить задание"
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         ))
                                                     )}
@@ -525,6 +559,20 @@ const EditCoursePage: React.FC = () => {
                 title="Удалить урок"
                 message="Вы уверены, что хотите удалить этот урок?"
                 itemName={deletingLesson?.title || 'Без названия'}
+                isLoading={isLoading}
+            />
+
+            {/* Confirm Delete Task Modal */}
+            <ConfirmDeleteModal
+                isOpen={isDeleteTaskModalOpen}
+                onClose={() => {
+                    setIsDeleteTaskModalOpen(false);
+                    setDeletingTask(null);
+                }}
+                onConfirm={handleConfirmDeleteTask}
+                title="Удалить задание"
+                message="Вы уверены, что хотите удалить это задание?"
+                itemName={deletingTask?.task.title || 'Без названия'}
                 isLoading={isLoading}
             />
         </div>
