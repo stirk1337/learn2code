@@ -18,7 +18,7 @@ const AdminTeachers: React.FC = () => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [form, setForm] = useState({
         displayName: '',
-        email: '',
+        login: '',
         password: 'teacher-123',
     });
     const { addToast } = useToastStore();
@@ -50,8 +50,8 @@ const AdminTeachers: React.FC = () => {
         .filter((user) => user.role?.toLowerCase() === 'teacher')
         .map((teacher, index) => ({
             ...teacher,
-            name: teacher.displayName || teacher.email || 'Без имени',
-            email: teacher.email || 'Нет email',
+            name: teacher.displayName || teacher.login || 'Без имени',
+            login: teacher.login || 'нет логина',
             emoji: teacherEmoji(index),
             groupsCount: groups.filter((group) => group.teacherId === teacher.id).length,
             coursesCount: courses.filter((course) => course.teacherId === teacher.id).length,
@@ -59,30 +59,30 @@ const AdminTeachers: React.FC = () => {
         .filter((teacher) => {
             const normalizedQuery = query.trim().toLowerCase();
             if (!normalizedQuery) return true;
-            return `${teacher.name} ${teacher.email}`.toLowerCase().includes(normalizedQuery);
+            return `${teacher.name} ${teacher.login}`.toLowerCase().includes(normalizedQuery);
         });
 
     const handleCreateTeacher = async (event: React.FormEvent) => {
         event.preventDefault();
         const displayName = form.displayName.trim();
-        const email = form.email.trim();
+        const login = form.login.trim();
         const password = form.password.trim();
 
-        if (!displayName || !email || password.length < 6) {
-            addToast('Заполните имя, email и пароль от 6 символов', 'error');
+        if (!displayName || !login || password.length < 6) {
+            addToast('Заполните имя, логин и пароль от 6 символов', 'error');
             return;
         }
 
         const teacher = await createUser({
             displayName,
-            email,
+            login,
             password,
             role: 'Teacher',
         });
 
         if (teacher) {
             addToast('Преподаватель создан', 'success');
-            setForm({ displayName: '', email: '', password: 'teacher-123' });
+            setForm({ displayName: '', login: '', password: 'teacher-123' });
             setIsFormOpen(false);
         }
     };
@@ -138,13 +138,12 @@ const AdminTeachers: React.FC = () => {
                         />
                     </div>
                     <div className="space-y-2">
-                        <label className="block text-sm font-semibold text-[#1A1D2D]">Email</label>
+                        <label className="block text-sm font-semibold text-[#1A1D2D]">Логин</label>
                         <input
                             className={fieldClass}
-                            type="email"
-                            value={form.email}
-                            onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-                            placeholder="teacher@example.com"
+                            value={form.login}
+                            onChange={(event) => setForm((prev) => ({ ...prev, login: event.target.value }))}
+                            placeholder="ivanov"
                             required
                         />
                     </div>
@@ -220,7 +219,7 @@ const AdminTeachers: React.FC = () => {
                             <div className="flex-1 min-w-0">
                                 <h3 className="font-bold text-[#1A1D2D] leading-tight">{t.name}</h3>
                                 <p className="text-xs text-[#6B7280] flex items-center gap-1 mt-1 truncate">
-                                    <Mail className="w-3 h-3 shrink-0" /> {t.email}
+                                    <Mail className="w-3 h-3 shrink-0" /> @{t.login}
                                 </p>
                             </div>
                             <button

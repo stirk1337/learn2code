@@ -42,8 +42,8 @@ const quickActions = [
 const isRole = (role: string | null, expected: 'student' | 'teacher' | 'admin') =>
     role?.toLowerCase() === expected;
 
-const getDisplayName = (displayName: string | null, email: string | null) =>
-    displayName || email || 'Без имени';
+const getDisplayName = (displayName: string | null, login: string | null) =>
+    displayName || login || 'Без имени';
 
 const formatDateTime = (value: string) => {
     const date = new Date(value);
@@ -130,7 +130,7 @@ const AdminDashboard: React.FC = () => {
         })),
         ...users.map((user) => ({
             id: `user-${user.id}`,
-            text: `Добавлен пользователь ${getDisplayName(user.displayName, user.email)}`,
+            text: `Добавлен пользователь ${getDisplayName(user.displayName, user.login)}`,
             time: user.createdAt,
             icon: Users,
         })),

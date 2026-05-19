@@ -182,6 +182,7 @@ const EditCoursePage: React.FC = () => {
             title: data.title,
             description: data.description,
             order: data.order,
+            courseId: editingLesson.courseId,
         });
 
         if (lesson) {

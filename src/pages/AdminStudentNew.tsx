@@ -11,7 +11,7 @@ const field =
 
 interface CreatedCredential {
     name: string;
-    email: string;
+    login: string;
     password: string;
 }
 
@@ -26,10 +26,9 @@ const slugify = (value: string) =>
 
 const generatePassword = () => `kid-${Math.floor(100000 + Math.random() * 900000)}`;
 
-const buildEmail = (displayName: string, seed: number) => {
+const buildLogin = (displayName: string, seed: number) => {
     const slug = slugify(displayName);
-    const localPart = slug || `student-${seed}`;
-    return `${localPart}-${seed}@learn2code.local`;
+    return slug ? `${slug}-${seed}` : `student-${seed}`;
 };
 
 const parseBulkRows = (raw: string) =>
@@ -41,11 +40,11 @@ const parseBulkRows = (raw: string) =>
             const csvParts = line.split(',').map((part) => part.trim());
             if (csvParts.length >= 2) {
                 const displayName = [csvParts[0], csvParts[1]].filter(Boolean).join(' ');
-                const email = csvParts.find((part) => part.includes('@')) || '';
-                return { displayName, email };
+                const login = csvParts.slice(2).find((part) => part.length > 0) || '';
+                return { displayName, login };
             }
 
-            return { displayName: line, email: '' };
+            return { displayName: line, login: '' };
         })
         .filter((row) => row.displayName.trim());
 
@@ -56,7 +55,7 @@ const AdminStudentNew: React.FC = () => {
     const [loginSeed, setLoginSeed] = useState(() => Math.floor(1000 + Math.random() * 9000));
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
-    const [email, setEmail] = useState('');
+    const [login, setLogin] = useState('');
     const [groupId, setGroupId] = useState('');
     const [bulkText, setBulkText] = useState('');
     const [bulkGroupId, setBulkGroupId] = useState('');
@@ -81,11 +80,11 @@ const AdminStudentNew: React.FC = () => {
         () => [firstName.trim(), lastName.trim()].filter(Boolean).join(' '),
         [firstName, lastName]
     );
-    const generatedEmail = useMemo(
-        () => buildEmail(displayName || 'student', loginSeed),
+    const generatedLogin = useMemo(
+        () => buildLogin(displayName || 'student', loginSeed),
         [displayName, loginSeed]
     );
-    const loginEmail = email.trim() || generatedEmail;
+    const finalLogin = login.trim() || generatedLogin;
     const isBusy = isSubmitting || isUsersLoading || isGroupsLoading;
     const error = usersError || groupsError;
 
@@ -113,7 +112,7 @@ const AdminStudentNew: React.FC = () => {
 
         setIsSubmitting(true);
         const user = await createUser({
-            email: loginEmail,
+            login: finalLogin,
             displayName,
             password: pwd.trim(),
             role: 'Student',
@@ -123,10 +122,10 @@ const AdminStudentNew: React.FC = () => {
             const addedToGroup = await addCreatedStudentToGroup(user.id, groupId);
             if (addedToGroup) {
                 await fetchGroups();
-                setCreatedCredentials([{ name: displayName, email: loginEmail, password: pwd.trim() }]);
+                setCreatedCredentials([{ name: displayName, login: finalLogin, password: pwd.trim() }]);
                 setFirstName('');
                 setLastName('');
-                setEmail('');
+                setLogin('');
                 setGroupId('');
                 setPwd(generatePassword());
                 setLoginSeed(Math.floor(1000 + Math.random() * 9000));
@@ -149,9 +148,9 @@ const AdminStudentNew: React.FC = () => {
 
         for (const [index, row] of rows.entries()) {
             const password = generatePassword();
-            const createdEmail = row.email || buildEmail(row.displayName, loginSeed + index);
+            const createdLogin = row.login || buildLogin(row.displayName, loginSeed + index);
             const user = await createUser({
-                email: createdEmail,
+                login: createdLogin,
                 displayName: row.displayName,
                 password,
                 role: 'Student',
@@ -160,7 +159,7 @@ const AdminStudentNew: React.FC = () => {
             if (user) {
                 const addedToGroup = await addCreatedStudentToGroup(user.id, bulkGroupId);
                 if (addedToGroup) {
-                    credentials.push({ name: row.displayName, email: createdEmail, password });
+                    credentials.push({ name: row.displayName, login: createdLogin, password });
                 }
             }
         }
@@ -221,9 +220,9 @@ const AdminStudentNew: React.FC = () => {
                     <h3 className="font-bold text-emerald-900">Созданные учётные данные</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {createdCredentials.map((credential) => (
-                            <div key={`${credential.email}-${credential.password}`} className="bg-white rounded-[12px] border border-emerald-100 p-3 text-sm">
+                            <div key={`${credential.login}-${credential.password}`} className="bg-white rounded-[12px] border border-emerald-100 p-3 text-sm">
                                 <p className="font-semibold text-[#1A1D2D]">{credential.name}</p>
-                                <p className="font-mono text-xs text-[#6B7280] mt-1">{credential.email}</p>
+                                <p className="font-mono text-xs text-[#6B7280] mt-1">@{credential.login}</p>
                                 <p className="font-mono text-xs text-[#6B7280]">{credential.password}</p>
                             </div>
                         ))}
@@ -247,14 +246,13 @@ const AdminStudentNew: React.FC = () => {
                             </div>
                             <div className="space-y-2">
                                 <label className="block text-sm font-semibold text-[#1A1D2D]">
-                                    Email для входа
+                                    Логин
                                 </label>
                                 <input
                                     className={field}
-                                    type="email"
-                                    value={email}
-                                    onChange={(event) => setEmail(event.target.value)}
-                                    placeholder={generatedEmail}
+                                    value={login}
+                                    onChange={(event) => setLogin(event.target.value)}
+                                    placeholder={generatedLogin}
                                 />
                             </div>
                             <div className="space-y-2">
@@ -278,7 +276,7 @@ const AdminStudentNew: React.FC = () => {
                             </div>
                             <div className="space-y-2">
                                 <label className="block text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Логин</label>
-                                <input className={`${field} font-mono bg-white`} value={loginEmail} readOnly />
+                                <input className={`${field} font-mono bg-white`} value={finalLogin} readOnly />
                             </div>
                             <div className="space-y-2">
                                 <label className="block text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Пароль</label>
@@ -347,7 +345,7 @@ const AdminStudentNew: React.FC = () => {
                                     <Upload className="w-7 h-7" />
                                 </div>
                                 <p className="font-bold text-[#1A1D2D]">Вставьте CSV-строки ниже</p>
-                                <p className="text-sm text-[#6B7280] mt-1">first_name,last_name,email</p>
+                                <p className="text-sm text-[#6B7280] mt-1">first_name,last_name,login</p>
                             </button>
 
                             <div className="space-y-2">
@@ -357,7 +355,7 @@ const AdminStudentNew: React.FC = () => {
                                 <textarea
                                     value={bulkText}
                                     onChange={(event) => setBulkText(event.target.value)}
-                                    placeholder={'Артём,Кузнецов,artem@example.com\nМария,Демидова,maria@example.com\nДмитрий Лебедев'}
+                                    placeholder={'Артём,Кузнецов,artem\nМария,Демидова,maria\nДмитрий Лебедев'}
                                     className="w-full border border-[#EEF0F4] rounded-[12px] px-3 py-2 min-h-[180px] font-mono text-sm text-[#1A1D2D] focus:outline-none focus:ring-2 focus:ring-[#734DE6]/25"
                                 />
                             </div>
@@ -381,19 +379,19 @@ const AdminStudentNew: React.FC = () => {
                                 <FileSpreadsheet className="w-5 h-5 text-blue-600" /> Шаблон CSV
                             </h3>
                             <p className="text-sm text-[#6B7280]">
-                                Если email не указан, система сгенерирует технический email для входа.
+                                Если логин не указан, система сгенерирует его автоматически.
                             </p>
                             <div className="bg-white rounded-[12px] p-3 text-xs font-mono text-[#6B7280] border border-[#EEF0F4]">
-                                first_name,last_name,email
+                                first_name,last_name,login
                                 <br />
-                                Артём,Кузнецов,artem@mail.ru
+                                Артём,Кузнецов,artem
                                 <br />
                                 Мария,Демидова,
                             </div>
                             <button
                                 className="flex items-center justify-center gap-2 border border-[#E0E4EB] w-full px-3 py-2 rounded-[8px] text-sm text-[#1A1D2D] hover:bg-white transition-colors"
                                 type="button"
-                                onClick={() => setBulkText('Артём,Кузнецов,artem@mail.ru\nМария,Демидова,\nДмитрий Лебедев')}
+                                onClick={() => setBulkText('Артём,Кузнецов,artem\nМария,Демидова,\nДмитрий Лебедев')}
                             >
                                 <Download className="w-4 h-4" /> Подставить шаблон
                             </button>

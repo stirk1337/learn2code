@@ -10,7 +10,7 @@ import { UserDto } from '@/services/api';
 const field =
     'w-full border border-[#EEF0F4] rounded-[10px] h-11 px-3 text-[#1A1D2D] bg-white focus:outline-none focus:ring-2 focus:ring-[#734DE6]/25';
 
-const getName = (user: UserDto) => user.displayName || user.email || 'Без имени';
+const getName = (user: UserDto) => user.displayName || user.login || 'Без имени';
 
 const getInitials = (name: string) =>
     name
@@ -344,7 +344,7 @@ const AdminGroupEditor: React.FC = () => {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="font-semibold text-sm text-[#1A1D2D] truncate">{name}</p>
-                                                <p className="text-xs text-[#6B7280]">{student.email || 'Нет email'}</p>
+                                                <p className="text-xs text-[#6B7280]">{student.login ? `@${student.login}` : 'Без логина'}</p>
                                             </div>
                                             <button
                                                 className="p-2 rounded-[10px] text-[#6B7280] hover:text-red-600 hover:bg-red-50 disabled:opacity-50"

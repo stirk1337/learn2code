@@ -38,7 +38,7 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 
 const sortUsers = (users: UserDto[]) =>
     [...users].sort((a, b) =>
-        (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '', 'ru')
+        (a.displayName || a.login || '').localeCompare(b.displayName || b.login || '', 'ru')
     );
 
 export const useAdminStore = create<AdminStore>((set) => ({

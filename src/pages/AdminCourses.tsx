@@ -96,7 +96,7 @@ const AdminCourses: React.FC = () => {
                 emoji: courseEmoji(course.title, index),
                 lessonsCount: lessonCounts[course.id] || 0,
                 groupsCount: groups.filter((group) => group.courseId === course.id).length,
-                author: teacher?.displayName || teacher?.email || 'Автор не найден',
+                author: teacher?.displayName || teacher?.login || 'Автор не найден',
                 createdAtText: formatDate(course.createdAt),
             };
         })

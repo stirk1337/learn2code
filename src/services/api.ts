@@ -40,6 +40,36 @@ export interface LessonDto {
     courseId: string;
 }
 
+export type TaskPipelineState = 'draft' | 'published';
+
+export type SpriteType = 'cat' | 'apple' | 'wall';
+
+export interface SpriteStateDto {
+    type: SpriteType;
+    gridX: number;
+    gridY: number;
+    visible: boolean;
+}
+
+export interface SceneStateDto {
+    sprites: SpriteStateDto[] | null;
+}
+
+export interface ExecutionEventDto {
+    step: number;
+    eventType: string | null;
+    details: Record<string, unknown> | null;
+}
+
+export interface ExecutionTraceDto {
+    events: ExecutionEventDto[] | null;
+}
+
+export interface TaskConfigDto {
+    gridWidth: number;
+    gridHeight: number;
+}
+
 export interface TaskDto {
     id: string;
     title: string | null;
@@ -72,41 +102,6 @@ export interface ProgressDto {
     lastAttemptAt: string;
 }
 
-export interface BlockMapping {
-    blockId: string | null;
-    type: string | null;
-}
-
-export type TaskPipelineState = 'draft' | 'published';
-
-export type SpriteType = 'cat' | 'apple' | 'wall';
-
-export interface SpriteStateDto {
-    type: SpriteType;
-    gridX: number;
-    gridY: number;
-    visible: boolean;
-}
-
-export interface SceneStateDto {
-    sprites: SpriteStateDto[] | null;
-}
-
-export interface ExecutionEventDto {
-    step: number;
-    eventType: string | null;
-    details: Record<string, unknown> | null;
-}
-
-export interface ExecutionTraceDto {
-    events: ExecutionEventDto[] | null;
-}
-
-export interface TaskConfigDto {
-    gridWidth: number;
-    gridHeight: number;
-}
-
 export interface CodeIssueDto {
     type: string | null;
     message: string | null;
@@ -121,6 +116,7 @@ export interface CheckResultDto {
     hint: string | null;
     issues: CodeIssueDto[] | null;
     metrics: Record<string, number> | null;
+    finalState: SceneStateDto;
 }
 
 export interface SubmissionDto {
@@ -128,11 +124,9 @@ export interface SubmissionDto {
     taskId: string;
     studentId: string | null;
     code: string | null;
-    language: string | null;
-    isPassed: boolean;
-    isOptimal: boolean;
     submittedAt: string;
     result: CheckResultDto;
+    isDraft: boolean;
 }
 
 // ============ Request Типы из Swagger ============
@@ -223,11 +217,9 @@ export interface AddStudentToGroupRequest {
     studentId: string;
 }
 
-export interface SubmitSolutionRequest {
-    language: string | null;
+export interface UpdateDraftRequest {
     code: string | null;
     blocklyXml: string | null;
-    blockMap: Record<string, BlockMapping> | null;
 }
 
 export interface CreateUserRequest {
@@ -322,11 +314,11 @@ class ApiService {
         return this.handleResponse<T>(response);
     }
 
-    async post<T>(endpoint: string, data: unknown): Promise<ApiResponse<T>> {
+    async post<T>(endpoint: string, data?: unknown): Promise<ApiResponse<T>> {
         const response = await fetch(`${this.baseUrl}${endpoint}`, {
             method: 'POST',
             headers: this.getHeaders(),
-            body: JSON.stringify(data),
+            body: data === undefined ? undefined : JSON.stringify(data),
         });
         return this.handleResponse<T>(response);
     }
@@ -501,12 +493,12 @@ class ApiService {
     }
 
     async publishTask(id: string): Promise<TaskDto> {
-        const response = await this.post<TaskDto>(`/Tasks/${id}/publish`, {});
+        const response = await this.post<TaskDto>(`/Tasks/${id}/publish`);
         return response.data;
     }
 
     async unpublishTask(id: string): Promise<TaskDto> {
-        const response = await this.post<TaskDto>(`/Tasks/${id}/unpublish`, {});
+        const response = await this.post<TaskDto>(`/Tasks/${id}/unpublish`);
         return response.data;
     }
 
@@ -524,11 +516,6 @@ class ApiService {
 
     // ============ Submissions API ============
 
-    async createTaskSubmission(taskId: string, data: SubmitSolutionRequest): Promise<SubmissionDto> {
-        const response = await this.post<SubmissionDto>(`/tasks/${taskId}/Submissions`, data);
-        return response.data;
-    }
-
     async getTaskSubmissions(taskId: string, studentId?: string): Promise<SubmissionDto[]> {
         let endpoint = `/tasks/${taskId}/Submissions`;
         if (studentId) {
@@ -543,6 +530,26 @@ class ApiService {
         return response.data;
     }
 
+    async getDraftSubmission(taskId: string): Promise<SubmissionDto> {
+        const response = await this.get<SubmissionDto>(`/tasks/${taskId}/Submissions/draft`);
+        return response.data;
+    }
+
+    async createDraftSubmission(taskId: string): Promise<SubmissionDto> {
+        const response = await this.post<SubmissionDto>(`/tasks/${taskId}/Submissions/draft`);
+        return response.data;
+    }
+
+    async updateDraftSubmission(taskId: string, data: UpdateDraftRequest): Promise<SubmissionDto> {
+        const response = await this.put<SubmissionDto>(`/tasks/${taskId}/Submissions/draft`, data);
+        return response.data;
+    }
+
+    async submitDraft(taskId: string): Promise<SubmissionDto> {
+        const response = await this.post<SubmissionDto>(`/tasks/${taskId}/Submissions/draft/submit`);
+        return response.data;
+    }
+
     // ============ Users API (пути с заглавной буквы) ============
 
     async getUsers(): Promise<UserDto[]> {
@@ -553,6 +560,24 @@ class ApiService {
     async getUser(id: string): Promise<UserDto> {
         const response = await this.get<UserDto>(`/Users/${id}`);
         return response.data;
+    }
+
+    async createUser(data: CreateUserRequest): Promise<UserDto> {
+        const response = await this.post<UserDto>('/Users', data);
+        return response.data;
+    }
+
+    async updateUser(id: string, data: UpdateUserRequest): Promise<UserDto> {
+        const response = await this.put<UserDto>(`/Users/${id}`, data);
+        return response.data;
+    }
+
+    async deleteUser(id: string): Promise<void> {
+        await this.delete(`/Users/${id}`);
+    }
+
+    async resetPassword(id: string, data: ResetPasswordRequest): Promise<void> {
+        await this.post(`/Users/${id}/reset-password`, data);
     }
 }
 

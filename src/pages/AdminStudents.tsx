@@ -78,14 +78,13 @@ const AdminStudents: React.FC = () => {
             const studentGroups = groups.filter((group) =>
                 group.students?.some((groupStudent) => groupStudent.id === student.id)
             );
-            const name = student.displayName || student.email || 'Без имени';
-            const login = student.email?.split('@')[0] || student.id.slice(0, 8);
+            const name = student.displayName || student.login || 'Без имени';
+            const login = student.login || student.id.slice(0, 8);
 
             return {
                 id: student.id,
                 name,
                 login,
-                email: student.email || '',
                 groups: studentGroups.map((group) => group.name || 'Без названия'),
                 progress: progressByStudent[student.id] ?? null,
             };
@@ -93,7 +92,7 @@ const AdminStudents: React.FC = () => {
         .filter((student) => {
             const normalizedQuery = query.trim().toLowerCase();
             if (!normalizedQuery) return true;
-            return `${student.name} ${student.login} ${student.email} ${student.groups.join(' ')}`
+            return `${student.name} ${student.login} ${student.groups.join(' ')}`
                 .toLowerCase()
                 .includes(normalizedQuery);
         });

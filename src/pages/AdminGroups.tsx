@@ -40,7 +40,7 @@ const AdminGroups: React.FC = () => {
 
     const getTeacherName = (teacherId: string) => {
         const teacher = users.find((user) => user.id === teacherId);
-        return teacher?.displayName || teacher?.email || 'Не назначен';
+        return teacher?.displayName || teacher?.login || 'Не назначен';
     };
 
     const getCourseTitle = (courseId: string) => {

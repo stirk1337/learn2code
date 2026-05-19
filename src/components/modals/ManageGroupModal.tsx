@@ -51,12 +51,12 @@ const ManageGroupModal: React.FC<ManageGroupModalProps> = ({
     const filteredAvailable = availableStudents.filter(student =>
         !group.students?.find(s => s.id === student.id) &&
         ((student.displayName?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-         (student.email?.toLowerCase() || '').includes(searchQuery.toLowerCase()))
+         (student.login?.toLowerCase() || '').includes(searchQuery.toLowerCase()))
     );
 
     const filteredCurrent = (group.students || []).filter(student =>
         (student.displayName?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-        (student.email?.toLowerCase() || '').includes(searchQuery.toLowerCase())
+        (student.login?.toLowerCase() || '').includes(searchQuery.toLowerCase())
     );
 
     return (
@@ -149,7 +149,7 @@ const ManageGroupModal: React.FC<ManageGroupModalProps> = ({
                                                     {student.displayName || 'Без имени'}
                                                 </div>
                                                 <div className="text-xs text-[#6B7280]">
-                                                    {student.email || 'Нет email'}
+                                                    {student.login ? `@${student.login}` : 'Нет логина'}
                                                 </div>
                                             </div>
                                         </div>
@@ -189,7 +189,7 @@ const ManageGroupModal: React.FC<ManageGroupModalProps> = ({
                                                     {student.displayName || 'Без имени'}
                                                 </div>
                                                 <div className="text-xs text-[#6B7280]">
-                                                    {student.email || 'Нет email'}
+                                                    {student.login ? `@${student.login}` : 'Нет логина'}
                                                 </div>
                                             </div>
                                         </div>
