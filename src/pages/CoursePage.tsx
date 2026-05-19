@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCourseStore } from '@/store/useCourseStore';
 import { BookOpen, Clock, CheckCircle, Play, Lock, ChevronLeft, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
-import { TaskDto } from '@/services/api';
+import { api, TaskDto } from '@/services/api';
 
 // Расширенный тип урока с задачами
 interface LessonWithTasks {
@@ -27,6 +27,7 @@ const CoursePage: React.FC = () => {
         currentCourse,
         lessons,
         tasks,
+        progress,
         isLoading,
         error,
         fetchCourse,
@@ -60,23 +61,65 @@ const CoursePage: React.FC = () => {
         }
     }, [expandedLessonId, tasks]);
 
+    // При загрузке курса заранее подтягиваем задания всех уроков, чтобы статус
+    // "Выполнено / в процессе" отображался на карточках уроков сразу, без раскрытия.
+    useEffect(() => {
+        if (lessons.length === 0) return;
+        let cancelled = false;
+
+        Promise.all(
+            lessons.map(async (lesson) => {
+                try {
+                    const list = await api.getTasks(lesson.id);
+                    return [lesson.id, list] as const;
+                } catch {
+                    return [lesson.id, [] as TaskDto[]] as const;
+                }
+            })
+        ).then((entries) => {
+            if (cancelled) return;
+            setLessonTasks(prev => {
+                const next = { ...prev };
+                for (const [lessonId, list] of entries) {
+                    next[lessonId] = list;
+                }
+                return next;
+            });
+        });
+
+        return () => { cancelled = true; };
+    }, [lessons]);
+
     if (!user || user.role !== 'student') return null;
 
-    // TODO: Получать прогресс курса из API
-    const progressPercentage = 0;
+    // Множество выполненных тасок из ProgressDto
+    const completedTaskIds = new Set(progress.filter(p => p.completed).map(p => p.taskId));
 
-    // Определяем статус урока
-    const getLessonStatus = (index: number): LessonWithTasks['status'] => {
+    // Прогресс курса как доля выполненных тасок от всех загруженных в кэш
+    const allKnownTasks = Object.values(lessonTasks).flat();
+    const totalTasks = allKnownTasks.length || tasks.length;
+    const completedCount = allKnownTasks.filter(t => completedTaskIds.has(t.id)).length;
+    const progressPercentage = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
+
+    // Определяем статус урока: выполнен если все задания выполнены и есть хоть одно
+    const getLessonStatus = (lessonId: string, index: number): LessonWithTasks['status'] => {
+        const lessonTasksList = lessonTasks[lessonId] || [];
+        if (lessonTasksList.length > 0 && lessonTasksList.every(t => completedTaskIds.has(t.id))) {
+            return 'completed';
+        }
+        if (lessonTasksList.some(t => completedTaskIds.has(t.id))) {
+            return 'in-progress';
+        }
         if (index === 0) return 'available';
-        // TODO: Реальная логика на основе прогресса
-        return 'locked';
+        // TODO: разблокировать на основе прогресса предыдущего урока
+        return 'available';
     };
 
     // Подготавливаем уроки
     const lessonsWithStatus: LessonWithTasks[] = lessons.map((lesson, index) => ({
         ...lesson,
         tasks: lessonTasks[lesson.id] || [],
-        status: getLessonStatus(index),
+        status: getLessonStatus(lesson.id, index),
     }));
 
     const getLessonIcon = (status: LessonWithTasks['status']) => {
@@ -276,23 +319,47 @@ const CoursePage: React.FC = () => {
                                                 В этом уроке пока нет заданий
                                             </div>
                                         ) : (
-                                            tasks.map((task, index) => (
-                                                <div
-                                                    key={task.id}
-                                                    className="flex items-center justify-between p-3 bg-white rounded-[12px] border border-[#EEF0F4] hover:border-[#734DE6] transition-colors cursor-pointer"
-                                                    onClick={() => handleStartTask(task.id)}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-6 h-6 bg-[rgba(115,77,230,0.1)] rounded-full flex items-center justify-center text-[#734DE6] text-xs font-medium">
-                                                            {index + 1}
+                                            tasks.map((task, index) => {
+                                                const isCompleted = completedTaskIds.has(task.id);
+                                                return (
+                                                    <div
+                                                        key={task.id}
+                                                        className={`flex items-center justify-between p-3 bg-white rounded-[12px] border transition-colors cursor-pointer ${
+                                                            isCompleted
+                                                                ? 'border-emerald-200 bg-emerald-50/40'
+                                                                : 'border-[#EEF0F4] hover:border-[#734DE6]'
+                                                        }`}
+                                                        onClick={() => handleStartTask(task.id)}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div
+                                                                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                                                                    isCompleted
+                                                                        ? 'bg-emerald-100 text-emerald-700'
+                                                                        : 'bg-[rgba(115,77,230,0.1)] text-[#734DE6]'
+                                                                }`}
+                                                            >
+                                                                {isCompleted ? <CheckCircle className="w-4 h-4" /> : index + 1}
+                                                            </div>
+                                                            <span className="text-sm font-medium text-[#1A1D2D]">{task.title || 'Без названия'}</span>
+                                                            {isCompleted && (
+                                                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                                                                    Выполнено
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                        <span className="text-sm font-medium text-[#1A1D2D]">{task.title || 'Без названия'}</span>
+                                                        <button
+                                                            className={`px-3 py-1.5 text-xs font-medium rounded-[8px] transition-colors ${
+                                                                isCompleted
+                                                                    ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                                                    : 'bg-[#734DE6] text-white hover:bg-[#5a3eb8]'
+                                                            }`}
+                                                        >
+                                                            {isCompleted ? 'Открыть' : 'Начать'}
+                                                        </button>
                                                     </div>
-                                                    <button className="px-3 py-1.5 bg-[#734DE6] text-white text-xs font-medium rounded-[8px] hover:bg-[#5a3eb8] transition-colors">
-                                                        Начать
-                                                    </button>
-                                                </div>
-                                            ))
+                                                );
+                                            })
                                         )}
                                     </div>
                                 )}

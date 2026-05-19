@@ -17,6 +17,8 @@ import { api, SubmissionDto, TaskDto } from '@/services/api';
 import { useToastStore } from '@/store/useToastStore';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useEditorStore } from '@/store/useEditorStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useCourseStore } from '@/store/useCourseStore';
 import { runtime } from '@/engine/Runtime';
 import { toolboxConfig } from '@/blockly/toolbox';
 import { ScratchTheme } from '@/blockly/theme';
@@ -40,6 +42,8 @@ const StudentTaskPage: React.FC = () => {
 
     const { currentProject, setProject, updateBlocks } = useProjectStore();
     const { setRunning, isRunning } = useEditorStore();
+    const { user } = useAuthStore();
+    const { fetchStudentProgress, progress } = useCourseStore();
 
     const blocklyRef = useRef<HTMLDivElement>(null);
     const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
@@ -100,6 +104,11 @@ const StudentTaskPage: React.FC = () => {
                 }
                 if (cancelled) return;
                 setDraft(draftDto);
+
+                // Подтянем актуальный прогресс ученика (для бейджа "Принято" вверху)
+                if (user?.id) {
+                    fetchStudentProgress(user.id);
+                }
             } catch (e) {
                 if (cancelled) return;
                 console.error('[StudentTaskPage] load error:', e);
@@ -113,7 +122,7 @@ const StudentTaskPage: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [taskId, setProject]);
+    }, [taskId, setProject, user?.id, fetchStudentProgress]);
 
     // Инициализация Blockly — только после загрузки задания. Не зависим от draft,
     // чтобы handleSaveDraft не пересоздавал воркспейс.
@@ -276,6 +285,11 @@ const StudentTaskPage: React.FC = () => {
             setDraft(submitted);
             if (submitted.result?.isPassed) {
                 addToast('✅ Решение принято', 'success');
+                // Обновляем прогресс ученика, чтобы плашка "Выполнено"
+                // появилась в списке заданий курса.
+                if (user?.id) {
+                    fetchStudentProgress(user.id);
+                }
             } else {
                 addToast(submitted.result?.hint || 'Решение отправлено на проверку', 'info');
             }
@@ -331,7 +345,9 @@ const StudentTaskPage: React.FC = () => {
         );
     }
 
-    const isPassed = draft?.result?.isPassed === true;
+    const isPassed =
+        draft?.result?.isPassed === true ||
+        progress.some(p => p.taskId === taskId && p.completed);
 
     return (
         <div className="h-screen flex flex-col overflow-hidden bg-[#F8FAFB]">
