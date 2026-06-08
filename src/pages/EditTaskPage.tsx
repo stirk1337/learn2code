@@ -226,7 +226,7 @@ const EditTaskPage: React.FC = () => {
                 title: formData.title,
                 description: formData.description,
                 order: currentTask?.order ?? 1,
-                config: currentTask?.config || { gridWidth: STAGE_WIDTH, gridHeight: STAGE_HEIGHT },
+                config: currentTask?.config || { sceneWidth: STAGE_WIDTH, sceneHeight: STAGE_HEIGHT },
                 initialState: currentTask?.initialState || { sprites: [] },
                 solutionCode: pythonCode,
             });

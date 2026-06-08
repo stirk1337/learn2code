@@ -72,7 +72,7 @@ interface TaskDraft {
     hint: string;
     selectedCategories: string[];
     sprites?: any[];
-    config?: { gridWidth: number; gridHeight: number };
+    config?: { sceneWidth: number; sceneHeight: number };
 }
 
 const RecordSolutionPage: React.FC = () => {
@@ -344,21 +344,27 @@ const RecordSolutionPage: React.FC = () => {
         }
     };
 
-    // Конфиг сцены — фиксированные размеры превью 480×360
+    // Конфиг сцены — фиксированные размеры превью 480×360 (в пикселях)
     const buildConfig = (): TaskConfigDto => ({
-        gridWidth: STAGE_WIDTH,
-        gridHeight: STAGE_HEIGHT,
+        sceneWidth: STAGE_WIDTH,
+        sceneHeight: STAGE_HEIGHT,
     });
 
     // Преобразуем спрайты проекта в SceneStateDto для бэкенда
     const buildInitialState = (): SceneStateDto => {
         if (!currentProject) return { sprites: [] };
-        const sprites: SpriteStateDto[] = currentProject.sprites.map(s => ({
-            type: s.type ?? 'cat',
-            gridX: Math.round(s.x),
-            gridY: Math.round(s.y),
-            visible: s.visible,
-        }));
+        const sprites: SpriteStateDto[] = currentProject.sprites.map(s => {
+            const costume = s.costumes[s.currentCostume] ?? s.costumes[0];
+            const scale = (s.size ?? 100) / 100;
+            return {
+                type: s.type ?? 'cat',
+                x: s.x,
+                y: s.y,
+                width: (costume?.width ?? 0) * scale,
+                height: (costume?.height ?? 0) * scale,
+                visible: s.visible,
+            };
+        });
         return { sprites };
     };
 

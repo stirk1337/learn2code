@@ -367,7 +367,7 @@ export const useCourseStore = create<CourseStore>((set, get) => ({
                 ?? { sprites: [] };
             const config = overrides?.config
                 ?? currentTask?.config
-                ?? { gridWidth: 0, gridHeight: 0 };
+                ?? { sceneWidth: 0, sceneHeight: 0 };
 
             const result = await api.testSolution(id, {
                 code,

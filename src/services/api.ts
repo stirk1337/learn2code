@@ -46,8 +46,10 @@ export type SpriteType = 'cat' | 'apple' | 'wall';
 
 export interface SpriteStateDto {
     type: SpriteType;
-    gridX: number;
-    gridY: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
     visible: boolean;
 }
 
@@ -66,8 +68,8 @@ export interface ExecutionTraceDto {
 }
 
 export interface TaskConfigDto {
-    gridWidth: number;
-    gridHeight: number;
+    sceneWidth: number;
+    sceneHeight: number;
 }
 
 export interface TaskDto {

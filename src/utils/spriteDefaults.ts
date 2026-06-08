@@ -111,15 +111,15 @@ export const createDefaultProject = (
 import type { SceneStateDto } from '@/services/api';
 import { getSpriteTypeDef } from './spriteTypes';
 
-// Создаёт спрайт по type/gridX/gridY/visible (из бэкендового initialState).
-// Использует канонический костюм из spriteTypes.
+// Создаёт спрайт по type/x/y/visible (из бэкендового initialState).
+// Координаты пиксельные (со знаком), используется канонический костюм из spriteTypes.
 export const createSpriteFromState = (state: NonNullable<SceneStateDto['sprites']>[number]): SpriteTarget => {
     const def = getSpriteTypeDef(state.type);
     return createDefaultSprite({
         name: def.name,
         type: state.type,
-        x: state.gridX,
-        y: state.gridY,
+        x: state.x,
+        y: state.y,
         visible: state.visible,
         costumes: [{
             id: uuidv4(),

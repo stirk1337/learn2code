@@ -1,75 +1,87 @@
 // Утилиты для конвертации между Project (внутренний формат редактора) и SceneStateDto (API формат)
+//
+// Модель сцены пиксельная (как в Runtime): начало координат — центр сцены,
+// x растёт вправо, y растёт вверх, координаты могут быть отрицательными.
+// width/height — реальные габариты спрайта на сцене (костюм * размер), нужны бэкенду
+// для расчёта столкновений со стенками и яблоками.
 
 import type { Project, SpriteTarget } from '@/types';
 import type { SceneStateDto, SpriteStateDto, TaskConfigDto, SpriteType } from '@/services/api';
+import { STAGE_WIDTH, STAGE_HEIGHT } from './constants';
+import { getSpriteTypeDef } from './spriteTypes';
 
 /**
- * Конвертирует SpriteTarget из Project во формат SpriteStateDto для API
+ * Вычисляет реальные габариты спрайта на сцене с учётом текущего костюма и размера (%).
+ */
+function getSpriteDimensions(sprite: SpriteTarget): { width: number; height: number } {
+    const costume = sprite.costumes[sprite.currentCostume] ?? sprite.costumes[0];
+    const scale = (sprite.size ?? 100) / 100;
+    const baseWidth = costume?.width ?? getSpriteTypeDef(sprite.type ?? 'cat').width;
+    const baseHeight = costume?.height ?? getSpriteTypeDef(sprite.type ?? 'cat').height;
+    return {
+        width: baseWidth * scale,
+        height: baseHeight * scale,
+    };
+}
+
+/**
+ * Определяет тип спрайта: берём явный type, иначе угадываем по имени.
+ */
+function resolveSpriteType(sprite: SpriteTarget): SpriteType {
+    if (sprite.type) return sprite.type;
+    const lowerName = sprite.name.toLowerCase();
+    if (lowerName.includes('apple') || lowerName.includes('яблоко')) return 'apple';
+    if (lowerName.includes('wall') || lowerName.includes('стена')) return 'wall';
+    return 'cat';
+}
+
+/**
+ * Конвертирует SpriteTarget из Project в SpriteStateDto для API.
+ * Координаты передаются как есть (в пикселях, со знаком).
  */
 export function spriteToSpriteStateDto(sprite: SpriteTarget): SpriteStateDto {
-    // Определяем тип спрайта по имени (или можно использовать другую логику)
-    const spriteType = detectSpriteType(sprite.name);
-    
-    // Конвертируем координаты сцены в координаты сетки
-    // Предполагаем, что сцена 480x360 (стандарт Scratch), сетка обычно меньше
-    const gridX = Math.round((sprite.x + 240) / 30); // 30px на ячейку
-    const gridY = Math.round((sprite.y + 180) / 30);
-    
+    const { width, height } = getSpriteDimensions(sprite);
     return {
-        type: spriteType,
-        gridX: Math.max(0, gridX),
-        gridY: Math.max(0, gridY),
+        type: resolveSpriteType(sprite),
+        x: sprite.x,
+        y: sprite.y,
+        width,
+        height,
         visible: sprite.visible,
     };
 }
 
 /**
- * Определяет тип спрайта по имени
- */
-function detectSpriteType(name: string): SpriteType {
-    const lowerName = name.toLowerCase();
-    if (lowerName.includes('cat') || lowerName.includes('кот')) return 'cat';
-    if (lowerName.includes('apple') || lowerName.includes('яблоко')) return 'apple';
-    if (lowerName.includes('wall') || lowerName.includes('стена')) return 'wall';
-    return 'cat'; // По умолчанию
-}
-
-/**
- * Конвертирует Project во SceneStateDto для отправки на API
+ * Конвертирует Project в SceneStateDto для отправки на API.
  */
 export function projectToSceneStateDto(project: Project): SceneStateDto {
-    const sprites: SpriteStateDto[] = project.sprites
-        .filter(sprite => sprite.visible) // Только видимые спрайты
-        .map(sprite => spriteToSpriteStateDto(sprite));
-    
-    return {
-        sprites,
-    };
+    const sprites: SpriteStateDto[] = project.sprites.map(sprite => spriteToSpriteStateDto(sprite));
+    return { sprites };
 }
 
 /**
- * Создает TaskConfigDto из размеров сцены проекта
+ * Создаёт TaskConfigDto из размеров сцены проекта.
  */
-export function projectToTaskConfigDto(project: Project): TaskConfigDto {
-    // Стандартный размер сцены Scratch 480x360
-    // Конвертируем в размер сетки (16x12 для стандартной ячейки 30px)
+export function projectToTaskConfigDto(_project: Project): TaskConfigDto {
     return {
-        gridWidth: 16,
-        gridHeight: 12,
+        sceneWidth: STAGE_WIDTH,
+        sceneHeight: STAGE_HEIGHT,
     };
 }
 
 /**
- * Создает начальное состояние (initialState) для нового задания
- * с котом в начальной позиции
+ * Создаёт начальное состояние (initialState) для нового задания с котом в центре.
  */
 export function createDefaultInitialState(): SceneStateDto {
+    const def = getSpriteTypeDef('cat');
     return {
         sprites: [
             {
                 type: 'cat',
-                gridX: 0,
-                gridY: 0,
+                x: 0,
+                y: 0,
+                width: def.width,
+                height: def.height,
                 visible: true,
             },
         ],
@@ -77,15 +89,18 @@ export function createDefaultInitialState(): SceneStateDto {
 }
 
 /**
- * Создает ожидаемое конечное состояние (expectedFinalState) по умолчанию
+ * Создаёт ожидаемое конечное состояние (expectedFinalState) по умолчанию.
  */
 export function createDefaultExpectedState(): SceneStateDto {
+    const def = getSpriteTypeDef('cat');
     return {
         sprites: [
             {
                 type: 'cat',
-                gridX: 5,
-                gridY: 5,
+                x: 100,
+                y: 100,
+                width: def.width,
+                height: def.height,
                 visible: true,
             },
         ],
@@ -93,87 +108,64 @@ export function createDefaultExpectedState(): SceneStateDto {
 }
 
 /**
- * Создает конфигурацию задания по умолчанию
+ * Создаёт конфигурацию задания по умолчанию (размеры сцены в пикселях).
  */
 export function createDefaultTaskConfig(): TaskConfigDto {
     return {
-        gridWidth: 10,
-        gridHeight: 10,
+        sceneWidth: STAGE_WIDTH,
+        sceneHeight: STAGE_HEIGHT,
     };
 }
 
 /**
- * Конвертирует SceneStateDto обратно в формат для отображения
- * (используется при загрузке задания из API)
+ * Конвертирует SceneStateDto в формат для отображения (при загрузке задания из API).
  */
 export function sceneStateDtoToDisplayInfo(sceneState: SceneStateDto): {
     sprites: Array<{
         type: string;
         x: number;
         y: number;
+        width: number;
+        height: number;
         visible: boolean;
     }>;
 } {
     return {
         sprites: (sceneState.sprites || []).map(sprite => ({
             type: sprite.type,
-            x: sprite.gridX,
-            y: sprite.gridY,
+            x: sprite.x,
+            y: sprite.y,
+            width: sprite.width,
+            height: sprite.height,
             visible: sprite.visible,
         })),
     };
 }
 
 /**
- * Создает спрайт для редактора на основе типа и координат сетки
+ * Создаёт спрайт для редактора на основе типа и пиксельных координат.
  */
 export function createSpriteFromType(
-    type: 'cat' | 'apple' | 'wall',
-    gridX: number,
-    gridY: number,
+    type: SpriteType,
+    x: number,
+    y: number,
     id?: string
-): { id: string; name: string; type: 'cat' | 'apple' | 'wall'; gridX: number; gridY: number; visible: boolean; emoji: string } {
-    const spritesMap = {
+): { id: string; name: string; type: SpriteType; x: number; y: number; visible: boolean; emoji: string } {
+    const spritesMap: Record<SpriteType, { name: string; emoji: string }> = {
         cat: { name: 'Кот', emoji: '🐱' },
         apple: { name: 'Яблоко', emoji: '🍎' },
         wall: { name: 'Стена', emoji: '🧱' },
     };
-    
+
     const info = spritesMap[type];
-    
+
     return {
         id: id || `${type}_${Date.now()}`,
         name: info.name,
         type,
-        gridX,
-        gridY,
+        x,
+        y,
         visible: true,
         emoji: info.emoji,
-    };
-}
-
-/**
- * Конвертирует координаты сетки в координаты сцены
- */
-export function gridToSceneCoordinates(gridX: number, gridY: number, config: TaskConfigDto): { x: number; y: number } {
-    const cellWidth = 480 / config.gridWidth;
-    const cellHeight = 360 / config.gridHeight;
-    
-    return {
-        x: (gridX * cellWidth) - 240 + (cellWidth / 2),
-        y: (gridY * cellHeight) - 180 + (cellHeight / 2),
-    };
-}
-
-/**
- * Конвертирует координаты сцены в координаты сетки
- */
-export function sceneToGridCoordinates(x: number, y: number, config: TaskConfigDto): { gridX: number; gridY: number } {
-    const cellWidth = 480 / config.gridWidth;
-    const cellHeight = 360 / config.gridHeight;
-    
-    return {
-        gridX: Math.round((x + 240 - (cellWidth / 2)) / cellWidth),
-        gridY: Math.round((y + 180 - (cellHeight / 2)) / cellHeight),
     };
 }
