@@ -9,12 +9,12 @@ pythonGenerator.forBlock['motion_movesteps'] = function (block: Blockly.Block) {
 
 pythonGenerator.forBlock['motion_turnright'] = function (block: Blockly.Block) {
     const degrees = pythonGenerator.valueToCode(block, 'DEGREES', Order.ATOMIC) || '15';
-    return `sprite.turn_right(${degrees})\n`;
+    return `turn(${degrees})\n`;
 };
 
 pythonGenerator.forBlock['motion_turnleft'] = function (block: Blockly.Block) {
     const degrees = pythonGenerator.valueToCode(block, 'DEGREES', Order.ATOMIC) || '15';
-    return `sprite.turn_left(${degrees})\n`;
+    return `turn(-(${degrees}))\n`;
 };
 
 pythonGenerator.forBlock['motion_gotoxy'] = function (block: Blockly.Block) {
@@ -33,8 +33,9 @@ pythonGenerator.forBlock['motion_yposition'] = function () {
 
 // Управление
 pythonGenerator.forBlock['control_wait'] = function (block: Blockly.Block) {
-    const secs = pythonGenerator.valueToCode(block, 'DURATION', Order.ATOMIC) || '1';
-    return `await runtime.wait(${secs})\n`;
+    // Бэкенд исполняет код синхронно и не поддерживает задержки — no-op.
+    void block;
+    return `pass\n`;
 };
 
 pythonGenerator.forBlock['control_repeat'] = function (block: Blockly.Block) {
@@ -98,11 +99,18 @@ pythonGenerator.forBlock['text'] = function (block: Blockly.Block) {
 
 // События
 pythonGenerator.forBlock['event_whenflagclicked'] = function (block: Blockly.Block) {
-    const code = pythonGenerator.statementToCode(block, 'STACK') || '  pass\n';
-    return `@when_flag_clicked
-async def on_flag():
-${code}
-`;
+    // Бэкенд исполняет код синхронно через exec без обработчиков событий —
+    // тело блока «когда нажат флаг» выполняется как обычный код верхнего уровня.
+    // statementToCode добавляет один уровень отступа (рассчитан на вложение),
+    // поэтому снимаем его, чтобы код был валиден на верхнем уровне.
+    const code = pythonGenerator.statementToCode(block, 'STACK');
+    if (!code) return '';
+    const indent = pythonGenerator.INDENT;
+    const dedented = code
+        .split('\n')
+        .map(line => (line.startsWith(indent) ? line.slice(indent.length) : line))
+        .join('\n');
+    return dedented;
 };
 
 pythonGenerator.forBlock['event_whenkeypressed'] = function (block: Blockly.Block) {
@@ -133,13 +141,13 @@ ${code}
 // Внешний вид (Looks)
 pythonGenerator.forBlock['looks_say'] = function (block: Blockly.Block) {
     const message = pythonGenerator.valueToCode(block, 'MESSAGE', Order.ATOMIC) || "''";
-    return `sprite.say(${message})\n`;
+    return `say(${message})\n`;
 };
 
 pythonGenerator.forBlock['looks_sayforsecs'] = function (block: Blockly.Block) {
+    // Бэкенд не поддерживает задержку — игнорируем время, просто говорим.
     const message = pythonGenerator.valueToCode(block, 'MESSAGE', Order.ATOMIC) || "''";
-    const secs = pythonGenerator.valueToCode(block, 'SECS', Order.ATOMIC) || '2';
-    return `await sprite.say_for_secs(${message}, ${secs})\n`;
+    return `say(${message})\n`;
 };
 
 pythonGenerator.forBlock['looks_think'] = function (block: Blockly.Block) {

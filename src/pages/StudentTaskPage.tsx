@@ -283,6 +283,24 @@ const StudentTaskPage: React.FC = () => {
 
             const submitted = await api.submitDraft(taskId);
             setDraft(submitted);
+
+            // Применяем финальное состояние с бэкенда (столкновения, съеденные
+            // яблоки приходят с visible: false). Порядок спрайтов совпадает с initialState.
+            const finalSprites = submitted.result?.finalState?.sprites;
+            const project = useProjectStore.getState().currentProject;
+            if (finalSprites && project) {
+                const { updateSprite } = useProjectStore.getState();
+                finalSprites.forEach((bs, idx) => {
+                    const target = project.sprites[idx];
+                    if (!target) return;
+                    updateSprite(target.id, {
+                        x: bs.x,
+                        y: bs.y,
+                        visible: bs.visible,
+                    });
+                });
+            }
+
             if (submitted.result?.isPassed) {
                 addToast('✅ Решение принято', 'success');
                 // Обновляем прогресс ученика, чтобы плашка "Выполнено"

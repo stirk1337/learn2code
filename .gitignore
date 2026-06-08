@@ -1,6 +1,7 @@
 # Logs
 logs
 backend
+learn2code-backend
 макеты
 *.log
 npm-debug.log*

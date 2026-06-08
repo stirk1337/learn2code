@@ -420,6 +420,22 @@ const RecordSolutionPage: React.FC = () => {
                 initialState: buildInitialState(),
                 config: buildConfig(),
             });
+
+            // Применяем финальное состояние с бэкенда (учитывает столкновения и
+            // поедание яблок: съеденное яблоко приходит с visible: false).
+            // Спрайты возвращаются в том же порядке, в каком отправлялись в initialState.
+            if (result?.finalState?.sprites && currentProject) {
+                result.finalState.sprites.forEach((bs, idx) => {
+                    const target = currentProject.sprites[idx];
+                    if (!target) return;
+                    updateSprite(target.id, {
+                        x: bs.x,
+                        y: bs.y,
+                        visible: bs.visible,
+                    });
+                });
+            }
+
             if (result?.success) {
                 addToast('✅ Решение прошло тестирование на сервере', 'success');
             } else {

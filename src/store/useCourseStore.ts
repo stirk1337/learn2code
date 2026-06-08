@@ -57,7 +57,7 @@ interface CourseStore {
     deleteTask: (id: string) => Promise<boolean>;
     publishTask: (id: string) => Promise<TaskDto | null>;
     unpublishTask: (id: string) => Promise<TaskDto | null>;
-    testSolution: (id: string, code: string, overrides?: { initialState?: import('@/services/api').SceneStateDto; config?: import('@/services/api').TaskConfigDto }) => Promise<{ success: boolean; error?: string } | null>;
+    testSolution: (id: string, code: string, overrides?: { initialState?: import('@/services/api').SceneStateDto; config?: import('@/services/api').TaskConfigDto }) => Promise<{ success: boolean; error?: string; finalState?: import('@/services/api').SceneStateDto } | null>;
     setCurrentTask: (task: TaskDto | null) => void;
 
     // Группы
@@ -375,7 +375,7 @@ export const useCourseStore = create<CourseStore>((set, get) => ({
                 config,
             });
             set({ isLoading: false });
-            return { success: result.success, error: result.error || undefined };
+            return { success: result.success, error: result.error || undefined, finalState: result.finalState };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Ошибка тестирования решения';
             set({ error: errorMessage, isLoading: false });
