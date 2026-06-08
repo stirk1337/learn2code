@@ -4,7 +4,7 @@ import { useEditorStore } from '@/store/useEditorStore';
 import { Costume } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { fileToDataUrl, getImageDimensions } from '@/utils/helpers';
-import { Upload, Trash2, Copy, Plus } from 'lucide-react';
+import { Upload, Trash2, Copy } from 'lucide-react';
 import { SPRITE_TYPES } from '@/utils/spriteTypes';
 import EmptySpritePicker from './EmptySpritePicker';
 
@@ -121,15 +121,6 @@ const CostumeEditor: React.FC = () => {
                         </button>
                     </div>
                 ))}
-
-                {/* Кнопка добавления */}
-                <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-16 h-16 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center hover:border-scratch-blue hover:bg-blue-50 transition-all"
-                    title={`Добавить ${label.toLowerCase()}`}
-                >
-                    <Plus size={24} className="text-gray-400" />
-                </button>
 
                 <input
                     ref={fileInputRef}

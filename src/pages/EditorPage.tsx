@@ -283,7 +283,7 @@ const EditorPage: React.FC<EditorPageProps> = ({
                 </div>
 
                 {/* Right Panel - Stage & Sprites */}
-                <div className="w-80 flex flex-col border-l border-[#EEF0F4] bg-white shrink-0">
+                <div className="w-80 flex flex-col border-l border-[#EEF0F4] bg-white shrink-0 overflow-y-auto">
                     {/* Stage Controls */}
                     <div className="flex items-center justify-between px-4 py-2 border-b border-[#EEF0F4]">
                         <div className="flex items-center gap-2">
@@ -320,29 +320,29 @@ const EditorPage: React.FC<EditorPageProps> = ({
                     </div>
 
                     {/* Stage */}
-                    <div className="p-4">
+                    <div className="p-4 shrink-0">
                         <div className="relative rounded-[16px] overflow-hidden border border-[#EEF0F4] shadow-sm" style={{ aspectRatio: '4/3' }}>
                             <StageCanvas />
                         </div>
                     </div>
 
                     {/* Sprite Info */}
-                    <div className="px-4 py-2 border-t border-[#EEF0F4]">
+                    <div className="px-4 py-2 border-t border-[#EEF0F4] shrink-0">
                         <SpriteInfo />
                     </div>
 
                     {/* Sprites */}
-                    <div className="flex-1 flex flex-col min-h-0 border-t border-[#EEF0F4]">
+                    <div className="flex flex-col border-t border-[#EEF0F4] shrink-0">
                         <div className="px-4 py-2">
                             <h3 className="text-xs font-semibold text-[#6B7280] uppercase">Спрайты</h3>
                         </div>
-                        <div className="flex-1 overflow-hidden px-4 pb-4">
+                        <div className="h-52 overflow-hidden px-4 pb-4">
                             <SpriteList />
                         </div>
                     </div>
 
                     {/* Backdrop */}
-                    <div className="px-4 py-3 border-t border-[#EEF0F4]">
+                    <div className="px-4 py-3 border-t border-[#EEF0F4] shrink-0">
                         <h3 className="text-xs font-semibold text-[#6B7280] uppercase mb-2">Сцена</h3>
                         <BackdropSelector />
                     </div>

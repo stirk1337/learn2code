@@ -572,7 +572,7 @@ const RecordSolutionPage: React.FC = () => {
                         className="flex items-center gap-1 text-[#6B7280] hover:text-[#1A1D2D] transition-colors"
                     >
                         <ChevronLeft className="w-5 h-5" />
-                        <span className="text-sm">← Запись эталонного решения</span>
+                        <span className="text-sm">Запись эталонного решения</span>
                     </button>
                     <div className="h-6 w-px bg-[#EEF0F4]" />
                     <div>
@@ -672,7 +672,7 @@ const RecordSolutionPage: React.FC = () => {
                 </div>
 
                 {/* Right Panel - Stage & Sprites */}
-                <div className="w-[520px] flex flex-col border-l border-[#EEF0F4] bg-white shrink-0">
+                <div className="w-[520px] flex flex-col border-l border-[#EEF0F4] bg-white shrink-0 overflow-y-auto">
                     {/* Stage Controls */}
                     <div className="flex items-center justify-between px-4 py-2 border-b border-[#EEF0F4]">
                         <div className="flex items-center gap-2">
@@ -708,7 +708,7 @@ const RecordSolutionPage: React.FC = () => {
                     </div>
 
                     {/* Stage 480×360 */}
-                    <div className="p-4">
+                    <div className="p-4 shrink-0">
                         <div
                             className="relative rounded-[16px] overflow-hidden border border-[#EEF0F4] shadow-sm mx-auto"
                             style={{ width: STAGE_WIDTH, height: STAGE_HEIGHT }}
@@ -718,16 +718,16 @@ const RecordSolutionPage: React.FC = () => {
                     </div>
 
                     {/* Sprite Info */}
-                    <div className="px-4 py-2 border-t border-[#EEF0F4]">
+                    <div className="px-4 py-2 border-t border-[#EEF0F4] shrink-0">
                         <SpriteInfo />
                     </div>
 
                     {/* Sprites */}
-                    <div className="flex-1 flex flex-col min-h-0 border-t border-[#EEF0F4]">
+                    <div className="flex flex-col border-t border-[#EEF0F4] shrink-0">
                         <div className="px-4 py-2">
                             <h3 className="text-xs font-semibold text-[#6B7280] uppercase">Спрайты</h3>
                         </div>
-                        <div className="flex-1 overflow-hidden px-4 pb-4">
+                        <div className="h-52 overflow-hidden px-4 pb-4">
                             <SpriteList />
                         </div>
                     </div>

@@ -1,24 +1,56 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useEditorStore } from '@/store/useEditorStore';
-import { Plus, Upload, Paintbrush, Search } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { SPRITE_TYPES } from '@/utils/spriteTypes';
 
 interface SpriteListProps {
     readOnly?: boolean;
 }
 
 const SpriteList: React.FC<SpriteListProps> = ({ readOnly = false }) => {
-    const { currentProject, addSprite, removeSprite, duplicateSprite } = useProjectStore();
-    const { selectedSpriteId, selectSprite, setShowSpriteLibrary } = useEditorStore();
+    const { currentProject, addSpriteOfType, removeSprite, duplicateSprite } = useProjectStore();
+    const { selectedSpriteId, selectSprite } = useEditorStore();
+    const [showPicker, setShowPicker] = useState(false);
+    const [pickerPos, setPickerPos] = useState<{ right: number; bottom: number }>({ right: 0, bottom: 0 });
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    const openPicker = () => {
+        const rect = buttonRef.current?.getBoundingClientRect();
+        if (rect) {
+            setPickerPos({
+                right: window.innerWidth - rect.right,
+                bottom: window.innerHeight - rect.top + 8,
+            });
+        }
+        setShowPicker(v => !v);
+    };
+
+    useEffect(() => {
+        if (!showPicker) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as Node;
+            if (
+                menuRef.current && !menuRef.current.contains(target) &&
+                buttonRef.current && !buttonRef.current.contains(target)
+            ) {
+                setShowPicker(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showPicker]);
 
     if (!currentProject) return null;
 
     const sprites = currentProject.sprites;
 
-    const handleAddSprite = () => {
-        const name = `Спрайт${sprites.length + 1}`;
-        const id = addSprite({ name });
+    const handlePickType = (type: typeof SPRITE_TYPES[number]['type']) => {
+        const id = addSpriteOfType(type);
         selectSprite(id);
+        setShowPicker(false);
     };
 
     const handleContextMenu = (e: React.MouseEvent, spriteId: string) => {
@@ -30,9 +62,9 @@ const SpriteList: React.FC<SpriteListProps> = ({ readOnly = false }) => {
     };
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="relative flex flex-col h-full">
             {/* Список спрайтов */}
-            <div className="flex-1 overflow-y-auto p-2 flex flex-wrap gap-2 content-start">
+            <div className="flex-1 overflow-y-auto p-2 pb-14 flex flex-wrap gap-2 content-start">
                 {sprites.map((sprite) => {
                     const costume = sprite.costumes[sprite.currentCostume];
                     const isSelected = selectedSpriteId === sprite.id;
@@ -94,17 +126,43 @@ const SpriteList: React.FC<SpriteListProps> = ({ readOnly = false }) => {
                 })}
             </div>
 
-            {/* Кнопки добавления - только если не readOnly */}
+            {/* Кнопка добавления — плавающая в углу области списка */}
             {!readOnly && (
-                <div className="border-t border-ui-border p-4 flex items-center justify-center gap-2 min-h-[76px]">
-                    <button
-                        onClick={handleAddSprite}
-                        className="w-11 h-11 bg-scratch-blue text-white rounded-full flex items-center justify-center hover:bg-scratch-blue-dark transition-colors shadow-md shrink-0"
-                        title="Добавить спрайт"
-                    >
-                        <Plus size={21} />
-                    </button>
-                </div>
+                <button
+                    ref={buttonRef}
+                    onClick={openPicker}
+                    className="absolute bottom-2 right-2 w-10 h-10 bg-scratch-blue text-white rounded-full flex items-center justify-center hover:bg-scratch-blue-dark transition-colors shadow-md z-10"
+                    title="Добавить спрайт"
+                >
+                    <Plus size={20} />
+                </button>
+            )}
+
+            {/* Выбор типа спрайта — через портал, чтобы не обрезался overflow-контейнерами */}
+            {!readOnly && showPicker && createPortal(
+                <div
+                    ref={menuRef}
+                    className="fixed bg-white border border-[#E0E4EB] rounded-[12px] shadow-lg p-2 flex gap-2 z-50"
+                    style={{ right: pickerPos.right, bottom: pickerPos.bottom }}
+                >
+                    {SPRITE_TYPES.map(t => (
+                        <button
+                            key={t.type}
+                            onClick={() => handlePickType(t.type)}
+                            className="flex flex-col items-center gap-1 p-2 rounded-[8px] w-20 border border-transparent hover:border-[#734DE6] hover:bg-[#F8FAFB] transition-colors"
+                            title={t.name}
+                        >
+                            <img
+                                src={t.assetUrl}
+                                alt={t.name}
+                                className="w-12 h-12 object-contain"
+                                draggable={false}
+                            />
+                            <span className="text-xs font-medium text-[#1A1D2D]">{t.name}</span>
+                        </button>
+                    ))}
+                </div>,
+                document.body
             )}
         </div>
     );
