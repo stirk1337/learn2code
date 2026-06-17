@@ -428,12 +428,66 @@ export class Runtime {
 
             move(steps: number) {
                 console.log(`[Runtime] Moving sprite ${sprite.id} by ${steps} steps. Current pos: (${sprite.x}, ${sprite.y}), direction: ${sprite.direction}`);
+                
                 const rad = (sprite.direction - 90) * Math.PI / 180;
-                const dx = steps * Math.cos(rad);
-                const dy = steps * Math.sin(rad);
-                sprite.x += dx;
-                sprite.y += dy;
-                console.log(`[Runtime] New pos: (${sprite.x}, ${sprite.y}), delta: (${dx}, ${dy})`);
+                const totalDx = steps * Math.cos(rad);
+                const totalDy = steps * Math.sin(rad);
+                
+                // Разбиваем движение на шаги по 1 пикселю для проверки коллизий
+                const numSteps = Math.max(1, Math.floor(Math.abs(steps)));
+                const stepDx = totalDx / numSteps;
+                const stepDy = totalDy / numSteps;
+                
+                for (let i = 0; i < numSteps; i++) {
+                    const newX = sprite.x + stepDx;
+                    const newY = sprite.y + stepDy;
+                    
+                    // Проверяем границы сцены
+                    const halfW = STAGE_WIDTH / 2;
+                    const halfH = STAGE_HEIGHT / 2;
+                    if (newX < -halfW || newX > halfW || newY < -halfH || newY > halfH) {
+                        break; // Останавливаемся на границе
+                    }
+                    
+                    // Проверяем коллизии с другими спрайтами
+                    let hitWall = false;
+                    
+                    for (const other of runtime.state.sprites) {
+                        if (other.id === sprite.id || !other.visible) continue;
+                        
+                        // Простая проверка пересечения прямоугольников (AABB)
+                        const dx = Math.abs(newX - other.x);
+                        const dy = Math.abs(newY - other.y);
+                        const minDx = (sprite.size * 50 + other.size * 50) / 2 / 100;
+                        const minDy = (sprite.size * 50 + other.size * 50) / 2 / 100;
+                        
+                        if (dx < minDx && dy < minDy) {
+                            // Коллизия!
+                            const otherName = other.name.toLowerCase();
+                            
+                            if (otherName.includes('яблоко') || otherName.includes('apple')) {
+                                // Съедаем яблоко
+                                other.visible = false;
+                                console.log(`[Runtime] Apple collected at (${other.x}, ${other.y})`);
+                            } else if (otherName.includes('стена') || otherName.includes('wall')) {
+                                // Врезались в стену - останавливаемся
+                                hitWall = true;
+                                console.log(`[Runtime] Hit wall at (${other.x}, ${other.y})`);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (hitWall) {
+                        break; // Останавливаем движение
+                    }
+                    
+                    // Применяем шаг движения
+                    sprite.x = newX;
+                    sprite.y = newY;
+                }
+                
+                console.log(`[Runtime] New pos: (${sprite.x}, ${sprite.y}), delta: (${totalDx}, ${totalDy})`);
                 runtime.notifyStateChange();
             },
 
