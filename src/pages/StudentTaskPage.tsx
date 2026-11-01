@@ -25,6 +25,7 @@ import { ScratchTheme } from '@/blockly/theme';
 import { loadWorkspaceFromXml, getWorkspaceXml } from '@/blockly/setup';
 import '@/blockly/generators/python';
 import StageCanvas from '@/components/stage/StageCanvas';
+import HintPanel from '@/components/hints/HintPanel';
 import { buildProjectFromSceneState } from '@/utils/spriteDefaults';
 import { STAGE_WIDTH, STAGE_HEIGHT } from '@/utils/constants';
 
@@ -48,6 +49,11 @@ const StudentTaskPage: React.FC = () => {
     const blocklyRef = useRef<HTMLDivElement>(null);
     const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
     const hasInitializedRef = useRef(false);
+
+    // Ревизии для подсказок: workspace — любое сохранённое изменение,
+    // semantic — изменение поведения (перетаскивание по холсту его не меняет).
+    const workspaceRevisionRef = useRef(0);
+    const [semanticRevision, setSemanticRevision] = useState(0);
 
     // Refs для актуальных значений в change-listener'е
     const updateBlocksRef = useRef(updateBlocks);
@@ -181,6 +187,13 @@ const StudentTaskPage: React.FC = () => {
         workspaceRef.current.addChangeListener((event) => {
             if (!event || event.isUiEvent) return;
             persistBlocks();
+            workspaceRevisionRef.current++;
+            const move = event as Blockly.Events.BlockMove;
+            const onlyRepositioned =
+                event.type === Blockly.Events.BLOCK_MOVE &&
+                move.oldParentId === move.newParentId &&
+                move.oldInputName === move.newInputName;
+            if (!onlyRepositioned) setSemanticRevision(r => r + 1);
         });
 
         return () => {
@@ -439,6 +452,14 @@ const StudentTaskPage: React.FC = () => {
                             </div>
                             <p className="text-sm text-amber-700">{draft.result.hint}</p>
                         </div>
+                    )}
+                    {taskId && (
+                        <HintPanel
+                            taskId={taskId}
+                            workspaceRef={workspaceRef}
+                            semanticRevision={semanticRevision}
+                            getWorkspaceRevision={() => workspaceRevisionRef.current}
+                        />
                     )}
                 </div>
 
