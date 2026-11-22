@@ -247,7 +247,7 @@ const RecordSolutionPage: React.FC = () => {
                 wheel: true,
             },
             sounds: true,
-            media: 'https://unpkg.com/blockly/media/',
+            media: 'https://unpkg.com/blockly@11.2.2/media/',
         });
 
         hasInitializedRef.current = true;

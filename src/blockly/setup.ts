@@ -34,7 +34,7 @@ export const initBlocklyWorkspace = (
             wheel: true,
         },
         sounds: true,
-        media: 'https://unpkg.com/blockly/media/',
+        media: 'https://unpkg.com/blockly@11.2.2/media/',
     });
 
     // Регистрация callback для кнопки "Создать переменную"

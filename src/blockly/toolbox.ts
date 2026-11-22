@@ -1,3 +1,13 @@
+import * as Blockly from 'blockly';
+
+// Цвет категории — точкой слева (см. .blocklyTreeRow::before в index.css), а не полосой.
+class DotCategory extends Blockly.ToolboxCategory {
+    protected addColourBorder_(colour: string) {
+        this.rowDiv_?.style.setProperty('--category-colour', colour);
+    }
+}
+Blockly.registry.register(Blockly.registry.Type.TOOLBOX_ITEM, Blockly.ToolboxCategory.registrationName, DotCategory, true);
+
 export const toolboxConfig = {
     kind: 'categoryToolbox',
     contents: [

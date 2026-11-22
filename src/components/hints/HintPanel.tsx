@@ -357,7 +357,7 @@ const HintPanel: React.FC<HintPanelProps> = ({ taskId, workspaceRef, semanticRev
                         </li>
                     ))}
                 </ol>
-                {plan.explanation && <p className="text-xs text-[#6B7280] leading-relaxed">{plan.explanation}</p>}
+                <p className="text-sm text-[#1A1D2D] leading-relaxed">Нажми кнопку — блоки поправятся сами. Потом нажми «Запуск».</p>
                 {primaryButton('Применить исправление', applyRepair, Wand2)}
             </>
         );

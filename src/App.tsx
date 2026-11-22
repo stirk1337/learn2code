@@ -6,6 +6,9 @@ import ApplicationPage from '@/pages/ApplicationPage';
 import EditorPage from '@/pages/EditorPage';
 import TeacherDashboard from '@/pages/TeacherDashboard';
 import StudentDashboard from '@/pages/StudentDashboard';
+import AchievementsPage from '@/pages/AchievementsPage';
+import GroupRatingPage from '@/pages/GroupRatingPage';
+import StudentPointsPage from '@/pages/StudentPointsPage';
 import CoursePage from '@/pages/CoursePage';
 import EditCoursePage from '@/pages/EditCoursePage';
 import EditTaskPage from '@/pages/EditTaskPage';
@@ -57,6 +60,26 @@ const App: React.FC = () => {
       <Route path="/student" element={
         isAuthenticated && user?.role === 'student'
           ? <StudentDashboard />
+          : <Navigate to="/" />
+      } />
+      <Route path="/student/achievements" element={
+        isAuthenticated && user?.role === 'student'
+          ? <AchievementsPage />
+          : <Navigate to="/" />
+      } />
+      <Route path="/student/rating" element={
+        isAuthenticated && user?.role === 'student'
+          ? <GroupRatingPage />
+          : <Navigate to="/" />
+      } />
+      <Route path="/teacher/points" element={
+        isAuthenticated && (user?.role === 'teacher' || user?.role === 'admin')
+          ? <StudentPointsPage />
+          : <Navigate to="/" />
+      } />
+      <Route path="/teacher/rating" element={
+        isAuthenticated && (user?.role === 'teacher' || user?.role === 'admin')
+          ? <GroupRatingPage />
           : <Navigate to="/" />
       } />
       <Route path="/course/:courseId" element={

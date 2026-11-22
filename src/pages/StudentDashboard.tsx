@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import TopNav from '@/components/layout/TopNav';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCourseStore } from '@/store/useCourseStore';
-import closeTagIcon from '../../public/closeTagIcon.svg';
 import { BookOpen, Users, Star, Clock, BookOpenCheck, Loader2 } from 'lucide-react';
 
 // Преобразуем данные API в формат для отображения
@@ -31,7 +31,7 @@ const getCourseGradient = (index: number): string => {
 };
 
 const StudentDashboard: React.FC = () => {
-    const { user, logout } = useAuthStore();
+    const { user } = useAuthStore();
     const navigate = useNavigate();
     const {
         courses,
@@ -80,37 +80,7 @@ const StudentDashboard: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-[#F8FAFB]">
-            {/* Header */}
-            <header className="bg-white border-b border-[#EEF0F4]">
-                <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <div className="bg-[rgba(115,77,230,0.1)] rounded-[10px] p-2">
-                            <img src={closeTagIcon} alt="Logo" className="w-5 h-5" />
-                        </div>
-                        <span className="font-semibold text-[#1A1D2D]">Learn2Code</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <button
-                            onClick={() => navigate('/profile')}
-                            className="flex items-center gap-2 text-[#6B7280] hover:text-[#1A1D2D] transition-colors"
-                        >
-                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                <circle cx="12" cy="7" r="4"/>
-                            </svg>
-                            <span className="text-sm">Профиль</span>
-                        </button>
-                        <button
-                            onClick={logout}
-                            className="text-[#6B7280] hover:text-[#1A1D2D] transition-colors"
-                        >
-                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            </header>
+            <TopNav />
 
             <main className="max-w-6xl mx-auto px-4 py-8">
                 {/* Welcome Section */}

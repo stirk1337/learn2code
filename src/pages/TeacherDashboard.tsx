@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import TopNav from '@/components/layout/TopNav';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCourseStore } from '@/store/useCourseStore';
 import { useToastStore } from '@/store/useToastStore';
-import closeTagIcon from '../../public/closeTagIcon.svg';
 import {
     Plus, Users, BookOpen, CheckCircle, TrendingUp,
-    Edit2, MoreVertical, Settings, LogOut, Loader2,
+    Edit2, MoreVertical, Loader2,
     GraduationCap, ChevronRight, Trash2
 } from 'lucide-react';
 import CreateGroupModal from '@/components/modals/CreateGroupModal';
@@ -23,7 +23,7 @@ const mockActivity = [
 ];
 
 const TeacherDashboard: React.FC = () => {
-    const { user, logout } = useAuthStore();
+    const { user } = useAuthStore();
     const navigate = useNavigate();
     const { addToast } = useToastStore();
     const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
@@ -152,32 +152,7 @@ const TeacherDashboard: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-[#F8FAFB]">
-            {/* Header */}
-            <header className="bg-white border-b border-[#EEF0F4]">
-                <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <div className="bg-[rgba(115,77,230,0.1)] rounded-[10px] p-2">
-                            <img src={closeTagIcon} alt="Logo" className="w-5 h-5" />
-                        </div>
-                        <span className="font-semibold text-[#1A1D2D]">Learn2Code</span>
-                        <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full">
-                            {user.role === 'admin' ? 'Администратор' : 'Преподаватель'}
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <button className="flex items-center gap-2 text-[#6B7280] hover:text-[#1A1D2D] transition-colors">
-                            <Settings className="w-5 h-5" />
-                            <span className="text-sm">Настройки</span>
-                        </button>
-                        <button
-                            onClick={logout}
-                            className="text-[#6B7280] hover:text-[#1A1D2D] transition-colors"
-                        >
-                            <LogOut className="w-5 h-5" />
-                        </button>
-                    </div>
-                </div>
-            </header>
+            <TopNav />
 
             <main className="max-w-6xl mx-auto px-4 py-8">
                 {/* Error Message */}
