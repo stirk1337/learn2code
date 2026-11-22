@@ -241,6 +241,129 @@ export interface ResetPasswordRequest {
     newPassword: string | null;
 }
 
+// ============ Adaptive hints (/api/adaptive-hints) ============
+
+export interface HintAnalysisReceipt {
+    analysisId: string;
+    codeHash: string;
+    workspaceHash: string;
+    semanticRevision: number;
+    workspaceRevision: number;
+}
+
+export interface HintAnalysisStatus extends HintAnalysisReceipt {
+    status: 'queued' | 'running' | 'completed' | 'cancelled' | 'failed';
+    resultStatus: string | null;
+    isCurrent: boolean;
+}
+
+export interface HintAdviceCard {
+    level: number;
+    conceptId: string;
+    title: string;
+    question: string;
+    specificity: 'general' | 'concept' | 'addressed';
+    focus: { nodeId: string; line: number; blockId: string | null } | null;
+}
+
+export interface HintExampleContent {
+    strategy: string;
+    conceptId: string;
+    code: string;
+    publicGoal: string;
+    explanation: string;
+    variantIndex: number;
+}
+
+export type HintRepairExpression =
+    | { valueKind: 'number'; value: number }
+    | { valueKind: 'text'; value: string }
+    | { valueKind: 'variable'; name: string }
+    | { valueKind: 'binary'; blockType: string; left: HintRepairExpression; right: HintRepairExpression };
+
+export type HintRepairGraphEdit =
+    | { editKind: 'literal'; blockId: string; blockType: string; fieldName: string; beforeValue: string; afterValue: string }
+    | { editKind: 'operator'; blockId: string; beforeType: string; afterType: string }
+    | { editKind: 'variable_use'; blockId: string; beforeName: string; afterName: string }
+    | { editKind: 'wrap_repeat'; blockId: string; lastBlockId: string; loopBlockId: string; countBlockId: string; count: number }
+    | {
+          editKind: 'insert_action';
+          blockId: string;
+          position: { parentBlockId: string | null; branch: 'body' | 'orelse'; previousBlockId: string | null; nextBlockId: string | null };
+          newBlockId: string;
+          operation: 'move' | 'turn' | 'say';
+          argument: HintRepairExpression;
+      };
+
+export type HintRepairOperation =
+    | { kind: 'swap_adjacent'; firstBlockId: string; secondBlockId: string }
+    | { kind: 'set_number'; statementBlockId: string; fieldBlockId: string; fieldName: string; beforeValue: string; afterValue: string }
+    | {
+          kind: 'insert_say_after';
+          anchorBlockId: string;
+          blockId: string;
+          blockType: string;
+          textFieldName: string;
+          text: string;
+          inputName: string | null;
+          valueBlockId: string | null;
+          valueBlockType: string | null;
+      }
+    | { kind: 'graph_patch'; edits: HintRepairGraphEdit[] };
+
+export interface HintPatchPlan {
+    patchId: string;
+    analysisId: string;
+    baseRevision: number;
+    baseCodeHash: string;
+    baseWorkspaceHash: string;
+    targetNodeId: string;
+    operations: HintRepairOperation[];
+    explanation: string;
+}
+
+export interface HintDeliveryRequest {
+    requestId: string;
+    analysisId: string;
+    level: 1 | 2 | 3;
+    codeHash: string;
+    workspaceHash: string;
+    semanticRevision: number;
+    anotherExample?: boolean;
+    repairJobId?: string;
+    workspaceXml?: string;
+}
+
+export interface HintDeliveryResponse {
+    status: string; // delivered | no_issue_detected | no_example | unavailable
+    analysisId: string;
+    semanticRevision: number;
+    level: number | null;
+    advice: HintAdviceCard | null;
+    example: HintExampleContent | null;
+    variantIndex: number | null;
+    repair: HintPatchPlan | null;
+}
+
+export interface HintRepairStatus {
+    jobId: string;
+    analysisId: string;
+    status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+    resultStatus: string | null;
+    isCurrent: boolean;
+    planReady: boolean;
+}
+
+export interface HintRepairApplyRequest {
+    requestId: string;
+    deliveryRequestId: string;
+    analysisId: string;
+    baseRevision: number;
+    codeHash: string;
+    workspaceHash: string;
+    workspaceXml?: string;
+}
+
 class ApiService {
     private baseUrl: string;
     private token: string | null = null;
@@ -274,8 +397,8 @@ class ApiService {
                 if (typeof errorData === 'string') {
                     message = errorData;
                 } else if (errorData && typeof errorData === 'object') {
-                    const data = errorData as { message?: string; title?: string };
-                    message = data.message || data.title || fallbackMessage;
+                    const data = errorData as { message?: string; title?: string; code?: string };
+                    message = data.message || data.title || data.code || fallbackMessage;
                 }
             } else {
                 const errorText = await response.text().catch(() => '');
@@ -580,6 +703,38 @@ class ApiService {
 
     async resetPassword(id: string, data: ResetPasswordRequest): Promise<void> {
         await this.post(`/Users/${id}/reset-password`, data);
+    }
+
+    // ============ Adaptive hints API ============
+
+    async submitHintAnalysis(data: {
+        requestId: string;
+        taskId: string;
+        blocklyXml: string;
+        semanticRevision: number;
+        workspaceRevision: number;
+    }): Promise<HintAnalysisReceipt> {
+        return (await this.post<HintAnalysisReceipt>('/adaptive-hints/analyses/workspace', data)).data;
+    }
+
+    async getHintAnalysis(analysisId: string): Promise<HintAnalysisStatus> {
+        return (await this.get<HintAnalysisStatus>(`/adaptive-hints/analyses/${analysisId}`)).data;
+    }
+
+    async requestHint(data: HintDeliveryRequest): Promise<HintDeliveryResponse> {
+        return (await this.post<HintDeliveryResponse>('/adaptive-hints/requests', data)).data;
+    }
+
+    async submitHintRepair(data: { requestId: string; analysisId: string; codeHash: string; semanticRevision: number }): Promise<{ jobId: string }> {
+        return (await this.post<{ jobId: string }>('/adaptive-hints/repairs', data)).data;
+    }
+
+    async getHintRepair(jobId: string): Promise<HintRepairStatus> {
+        return (await this.get<HintRepairStatus>(`/adaptive-hints/repairs/${jobId}`)).data;
+    }
+
+    async applyHintRepair(patchId: string, data: HintRepairApplyRequest): Promise<{ status: string; repair: HintPatchPlan }> {
+        return (await this.post<{ status: string; repair: HintPatchPlan }>(`/adaptive-hints/repairs/${patchId}/apply`, data)).data;
     }
 }
 
